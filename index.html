@@ -3,115 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acceso - Transporte Moulin</title>
+    <title>Acceso - Moulin Cloud</title>
     <style>
-        body { 
-            font-family: 'Segoe UI', sans-serif; 
-            background: #102a43; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-        }
-        .login-card { 
-            background: white; 
-            padding: 40px; 
-            border-radius: 15px; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3); 
-            width: 350px; 
-            text-align: center; 
-        }
-        img { width: 120px; margin-bottom: 20px; }
-        h2 { color: #1a4a7a; margin-bottom: 25px; font-size: 20px; }
-        input { 
-            width: 100%; 
-            padding: 12px; 
-            margin: 10px 0; 
-            border: 1px solid #ddd; 
-            border-radius: 8px; 
-            box-sizing: border-box; 
-            font-size: 16px; 
-        }
-        button { 
-            width: 100%; 
-            padding: 15px; 
-            background: #38a169; 
-            color: white; 
-            border: none; 
-            border-radius: 8px; 
-            font-size: 18px; 
-            font-weight: bold; 
-            cursor: pointer; 
-            transition: 0.3s; 
-            margin-top: 10px;
-        }
-        button:hover { background: #2f855a; }
-        .error { 
-            color: #d32f2f; 
-            font-size: 14px; 
-            margin-top: 15px; 
-            display: none; 
-            background: #ffebee;
-            padding: 10px;
-            border-radius: 5px;
-        }
+        body { font-family: Arial, sans-serif; background: #102a43; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 300px; text-align: center; }
+        img { width: 150px; margin-bottom: 20px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #1a4a7a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #2a5a8a; }
+        .error { color: red; font-size: 12px; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="login-card">
-    <img id="logo_login" src="logo.png" onerror="this.src='https://via.placeholder.com/120x60?text=MOULIN'">
-    <h2>SISTEMA DE GESTIÓN</h2>
-    
-    <input type="text" id="user" placeholder="Usuario" autofocus>
+    <img src="logo.png" alt="Moulin" onerror="this.src='https://via.placeholder.com/150x50?text=MOULIN'">
+    <h2>SISTEMA CLOUD</h2>
+    <input type="text" id="user" placeholder="Usuario">
     <input type="password" id="pass" placeholder="Contraseña">
-    
-    <button onclick="intentarLogin()">INGRESAR</button>
-    
-    <p id="error-msg" class="error">Usuario o contraseña incorrectos</p>
+    <button onclick="login()">INGRESAR</button>
+    <div id="errorMsg" class="error">Usuario o contraseña incorrectos</div>
 </div>
 
 <script>
-    // Configuración de Usuarios, Prefijos y Permisos
-    const usuarios = [
-        { user: "admin", pass: "moulin2024", nombre: "Fernando", prefijo: "RECO", rol: "admin" },
-        { user: "avellaneda", pass: "ave123", nombre: "Depósito Avellaneda", prefijo: "AVEL", rol: "operador" },
-        { user: "santafe", pass: "sfe123", nombre: "Depósito Santa Fe", prefijo: "SFE", rol: "operador" },
-        { user: "rosario", pass: "ros123", nombre: "Depósito Rosario", prefijo: "ROS", rol: "operador" }
-    ];
+    const usuarios = {
+        "admin": { pass: "moulin2024", nombre: "Administrador", rol: "admin", prefijo: "RECO" },
+        "reco":  { pass: "reco123", nombre: "Reconquista", rol: "sucursal", prefijo: "RECO" },
+        "avel":  { pass: "avel123", nombre: "Avellaneda", rol: "sucursal", prefijo: "AVEL" },
+        "sfe":   { pass: "sfe123", nombre: "Santa Fe", rol: "sucursal", prefijo: "SFE" },
+        "ros":   { pass: "ros123", nombre: "Rosario", rol: "sucursal", prefijo: "ROS" }
+    };
 
-    function intentarLogin() {
-        const u = document.getElementById('user').value.trim().toLowerCase();
-        const p = document.getElementById('pass').value.trim();
-        const error = document.getElementById('error-msg');
+    function login() {
+        const u = document.getElementById('user').value.toLowerCase();
+        const p = document.getElementById('pass').value;
+        const error = document.getElementById('errorMsg');
 
-        // Buscar usuario
-        const encontrado = usuarios.find(uObj => uObj.user === u && uObj.pass === p);
-
-        if (encontrado) {
-            console.log("Acceso concedido para:", encontrado.nombre);
-            
-            // 1. Guardar la sesión
-            sessionStorage.setItem('moulin_sesion', JSON.stringify(encontrado));
-            
-            // 2. Intentar redirección (probamos con ./ para asegurar ruta local)
-            window.location.replace("./moulin_v51.html");
-            
+        if (usuarios[u] && usuarios[u].pass === p) {
+            // Guardamos la sesión (se borra al cerrar el navegador)
+            sessionStorage.setItem('moulin_sesion', JSON.stringify(usuarios[u]));
+            // Redirigimos al archivo de las guías (V70)
+            // Asegúrate de que el archivo de las guías se llame sistema.html o cambia el nombre aquí abajo
+            window.location.href = "sistema.html"; 
         } else {
             error.style.display = "block";
-            // Limpiar campo de contraseña para reintentar
-            document.getElementById('pass').value = "";
         }
     }
-
-    // Permitir ingresar dando "Enter"
-    document.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-            intentarLogin();
-        }
-    });
 </script>
-
 </body>
 </html>
