@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>SISTEMA MOULIN CLOUD V70 - CONTROL TOTAL</title>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getDatabase, ref, set, push, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCAsCocDQjimpjNo5l2oHTGO82XNTG7tzY",
+            authDomain: "transporte-moulin.firebaseapp.com",
+            databaseURL: "https://transporte-moulin-default-rtdb.firebaseio.com",
+            projectId: "transporte-moulin",
+            storageBucket: "transporte-moulin.firebasestorage.app",
+            messagingSenderId: "1022730425566",
+            appId: "1:1022730425566:web:1ec5b014b71d14ce579e4f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
+        if (!sesion) { window.location.href = "index.html"; }
+
+        const PREFIJO = sesion.prefijo;
+        const NOMBRE = sesion.nombre;
+        const ROL = sesion.rol;
+
+        window.historialGlobal = [];
+        window.filtroEstado = 'todos';
+        let proximoNumero = 1001;
+
+        onValue(ref(db, 'moulin/guias'), (snapshot) => {
+            const data = snapshot.val();
+            window.historialGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
+            if (window.historialGlobal.length > 0) {
+                const todos = window.historialGlobal.map(g => parseInt(g.num.split('-')[1]) || 0);
+                proximoNumero = Math.max(...todos) + 1;
+            }
+            document.getElementById('display_guia').innerText = `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`;
+            renderHistorial();
+        });
+
+        window.confirmarYEmitir = function() {
+            if(!document.getElementById('r_n').value || !document.getElementById('d_n').value) return alert("Faltan datos.");
+            const d = calcularTotales();
+            const guia = {
+                num: `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`,
+                fecha: new Date().toLocaleDateString(),
+                timestamp: Date.now(),
+                r_n: document.getElementById('r_n').value, r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value,
+                d_n: document.getElementById('d_n').value, d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value,
+                flete: d.flete.toFixed(2), seg: d.seg.toFixed(2), cr: d.cr.toFixed(2), total: d.total.toFixed(2),
+                pago_en: document.getElementById('pago_en').value, condicion: document.getElementById('condicion').value,
+                estado: 'recibido', emisor: NOMBRE,
+                items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(r => ({
+                    c: r.querySelector('.i-cant').value, t: r.querySelector('.i-tipo').value, d: r.querySelector('.i-det').value, u: r.querySelector('.i-unit').value
+                }))
+            };
+            push(ref(db, 'moulin/guias'), guia).then(() => { imprimir(guia); setTimeout(() => location.reload(), 500); });
+        };
+
+        window.actualizarEstadoNube = (id, est) => { update(ref(db, `moulin/guias/${id}`), { estado: est }); };
+        
+        window.finalizarTodoCiudad = async (pref) => {
+            if(!confirm(`¿Marcar TODAS las guías de ${pref} como ENTREGADAS?`)) return;
+            const aProcesar = window.historialGlobal.filter(g => g.num.startsWith(pref) && g.estado !== 'entregado');
+            for(let g of aProcesar) { await update(ref(db, `moulin/guias/${g.firebaseID}`), { estado: 'entregado' }); }
+            alert("Ciudad actualizada.");
+        };
+
+        window.cambiarFiltro = (val, btn) => {
+            window.filtroEstado = val;
+            document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderHistorial();
+        };
+
+        window.archivarNube = async () => {
+            if(!confirm("¿Descargar backup y BORRAR TODO el historial?")) return;
+            descargarCSV(window.historialGlobal, "BACKUP_MOULIN");
+            for(let g of window.historialGlobal) { await remove(ref(db, `moulin/guias/${g.firebaseID}`)); }
+            alert("Nube limpia.");
+        };
+    </script>
+
+    <style>
+        :root { --azul: #1a4a7a; --oscuro: #102a43; --verde: #38a169; --rojo: #d32f2f; }
+        body { font-family: Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 10px; padding-bottom: 110px; }
+        .hoja { background: white; max-width: 1000px; margin: auto; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--azul); margin-bottom: 10px; }
+        .caja { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; margin-bottom: 8px; border-radius: 5px; }
+        label { display: block; font-weight: bold; font-size: 10px; color: var(--azul); }
+        input, select { width: 92%; padding: 5px; border: 1px solid #ccc; font-size: 12px; margin-bottom: 3px; border-radius: 3px; }
+        .tabla-items { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .tabla-items th { background: var(--azul); color: white; padding: 5px; text-align: left; }
+        .barra-fija { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--oscuro); color: white; padding: 10px; display: flex; justify-content: space-around; align-items: center; z-index: 1000; }
+        .btn-imprimir { background: var(--verde); color: white; border: none; padding: 10px 30px; border-radius: 20px; font-size: 18px; font-weight: bold; cursor: pointer; }
+        .btn-filtro { padding: 5px 10px; border-radius: 12px; border: 1px solid #ccc; cursor: pointer; background: white; font-size: 10px; }
+        .btn-filtro.active { background: var(--azul); color: white; border-color: var(--azul); }
+        
+        @media print { 
+            @page { margin: 0; }
+            .no-print { display: none !important; } 
+            #seccion-impresion { display: block !important; }
+            .cupon { border: 2px solid #000; padding: 8px; height: 12.2cm; margin: 0.1cm auto; box-sizing: border-box; overflow: hidden; width: 96%; }
+        }
+        #seccion-impresion { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="hoja no-print">
+    <div class="header">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <img src="logo.png" style="height:40px" onerror="this.src='https://via.placeholder.com/100x40?text=MOULIN'">
+            <h2 style="margin:0; font-size:18px;">MOULIN CLOUD V70</h2>
+        </div>
+        <b id="display_guia" style="font-size:24px; color:var(--rojo)">...</b>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="caja"><label>REMITENTE</label><input type="text" id="r_n" placeholder="Nombre"><div style="display:flex; gap:3px"><input type="text" id="r_t" placeholder="Tel"><input type="text" id="r_cbu" placeholder="CBU/Alias"></div><div style="display:flex; gap:3px"><input type="text" id="r_d" placeholder="Dir"><input type="text" id="r_l" placeholder="Loc"></div></div>
+        <div class="caja"><label>DESTINATARIO</label><input type="text" id="d_n" placeholder="Nombre"><div style="display:flex; gap:3px"><input type="text" id="d_t" placeholder="Tel"><input type="text" id="d_cbu" placeholder="CBU/Alias"></div><div style="display:flex; gap:3px"><input type="text" id="d_d" placeholder="Dir"><input type="text" id="d_l" placeholder="Loc"></div></div>
+    </div>
+
+    <div class="caja">
+        <table class="tabla-items">
+            <thead><tr><th width="8%">CANT</th><th width="15%">TIPO</th><th>DETALLE</th><th width="12%">UNIT $</th><th width="12%">DECL $</th><th></th></tr></thead>
+            <tbody id="cuerpoItems"></tbody>
+        </table>
+        <button onclick="agregarFila()" style="margin-top:5px;">+ Fila</button>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top:10px;">
+            <div><label>Seguro %</label><input type="number" id="p_seg" value="0.8" step="0.1" oninput="calcularTotales()"></div>
+            <div><label>C.R. %</label><input type="number" id="p_cr" value="5.0" step="0.5" oninput="calcularTotales()"></div>
+            <div><label>CR Activo?</label><select id="cr_act" onchange="calcularTotales()"><option value="N">NO</option><option value="S">SÍ</option></select></div>
+            <div><label>Pago en</label><select id="pago_en"><option>ORIGEN</option><option>DESTINO</option></select></div>
+            <div><label>Condición</label><select id="condicion"><option>CONTADO</option><option>CTA CTE</option></select></div>
+        </div>
+        <div style="text-align:right; margin-top:10px;">
+            <button id="btn_admin" onclick="abrirAdmin()" style="padding:8px 20px; background:var(--oscuro); color:white; border:none; cursor:pointer; border-radius:4px;">📊 PANEL ADMIN</button>
+        </div>
+    </div>
+
+    <div class="caja" style="background:#edf2f7;">
+        <div style="display:flex; gap:5px; margin-bottom:8px; flex-wrap: wrap; align-items:center;">
+            <input type="text" id="busq" placeholder="🔍 Buscar..." oninput="renderHistorial()" style="width:120px; margin:0;">
+            <button onclick="cambiarFiltro('todos', this)" class="btn-filtro active">Todos</button>
+            <button onclick="cambiarFiltro('recibido', this)" class="btn-filtro">Recibido</button>
+            <button onclick="cambiarFiltro('deposito', this)" class="btn-filtro">Depósito</button>
+            <button onclick="cambiarFiltro('error', this)" class="btn-filtro">Error</button>
+            <span id="contador" style="font-size:11px; font-weight:bold; color:var(--azul); margin-left:auto;"></span>
+        </div>
+        <table class="tabla-items">
+            <thead><tr style="background:var(--oscuro); color:white;"><th>Guía</th><th>Trayecto</th><th>Total</th><th>Estado</th><th>🖨️</th></tr></thead>
+            <tbody id="listaHistorial"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="barra-fija no-print">
+    <div id="total_txt" style="font-size:24px; color:#48bb78; font-weight:bold;">TOTAL: $ 0.00</div>
+    <button class="btn-imprimir" onclick="confirmarYEmitir()">EMITIR E IMPRIMIR</button>
+</div>
+
+<div id="modalAdmin" class="no-print" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:white; padding:20px; border-radius:10px; box-shadow:0 0 50px rgba(0,0,0,0.5); z-index:1100; width:450px;">
+    <h3 style="text-align:center; margin-top:0;">CONTROL POR CIUDAD</h3>
+    <div id="resumen_loc"></div>
+    <hr>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:10px;">
+        <button onclick="generarReporte('hoy')" style="padding:8px;">REPORTE HOY</button>
+        <button onclick="generarReporte('mes')" style="padding:8px;">REPORTE MES</button>
+        <button onclick="archivarNube()" style="grid-column: span 2; background:var(--rojo); color:white; border:none; padding:10px; cursor:pointer; margin-top:5px;">📦 VACIAR HISTORIAL NUBE</button>
+    </div>
+    <button onclick="document.getElementById('modalAdmin').style.display='none'" style="margin-top:10px; width:100%;">CERRAR</button>
+</div>
+
+<div id="seccion-impresion"></div>
+
+<script>
+    function agregarFila() {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo"><option>Bulto</option><option>Pallet</option><option>Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="0" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
+        document.getElementById('cuerpoItems').appendChild(tr);
+    }
+
+    function calcularTotales() {
+        let f = 0, d = 0;
+        document.querySelectorAll('#cuerpoItems tr').forEach(r => {
+            f += (parseFloat(r.querySelector('.i-cant').value)||0)*(parseFloat(r.querySelector('.i-unit').value)||0);
+            d += (parseFloat(r.querySelector('.i-decl').value)||0);
+        });
+        let s = d * (parseFloat(document.getElementById('p_seg').value)/100 || 0);
+        let cr = document.getElementById('cr_act').value === 'S' ? d * (parseFloat(document.getElementById('p_cr').value)/100) : 0;
+        let t = f + s + cr;
+        document.getElementById('total_txt').innerText = `TOTAL: $ ${t.toLocaleString('es-AR')}`;
+        return {flete: f, seg: s, cr: cr, total: t};
+    }
+
+    function renderHistorial() {
+        const b = document.getElementById('busq').value.toLowerCase();
+        const data = window.historialGlobal || [];
+        const filtrados = data.filter(g => {
+            const mB = g.num.toLowerCase().includes(b) || (g.r_n && g.r_n.toLowerCase().includes(b));
+            const mE = window.filtroEstado === 'todos' || g.estado === window.filtroEstado;
+            return mB && mE;
+        });
+        document.getElementById('contador').innerText = `${filtrados.length} guías`;
+        document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `<tr>
+            <td><b>${g.num}</b><br><small>${g.fecha}</small></td>
+            <td>${g.r_n} > ${g.d_n}</td>
+            <td>$${g.total}</td>
+            <td>
+                <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:10px;">
+                    <option value="recibido" ${g.estado==='recibido'?'selected':''}>RECIBIDO</option>
+                    <option value="deposito" ${g.estado==='deposito'?'selected':''}>DEPÓSITO</option>
+                    <option value="entregado" ${g.estado==='entregado'?'selected':''}>ENTREGADO</option>
+                    <option value="error" ${g.estado==='error'?'selected':''}>ERROR</option>
+                </select>
+            </td>
+            <td><button onclick="reimprimir('${g.num}')">🖨️</button></td>
+        </tr>`).join('');
+    }
+
+    function abrirAdmin() {
+        const res = { "RECO": 0, "AVEL": 0, "SFE": 0, "ROS": 0 };
+        window.historialGlobal.forEach(g => { const p = g.num.split('-')[0]; if(res.hasOwnProperty(p)) res[p] += parseFloat(g.total); });
+        let html = "";
+        for (let loc in res) {
+            html += `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee; font-size:12px; align-items:center;">
+                <b>${loc}: $${res[loc].toLocaleString()}</b>
+                <div>
+                    <button onclick="descargarCSV(window.historialGlobal.filter(g=>g.num.startsWith('${loc}')), 'REPORTE_${loc}')" title="Descargar CSV">📥</button>
+                    <button onclick="finalizarTodoCiudad('${loc}')" style="background:var(--verde); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:9px; cursor:pointer;" title="Marcar todo como Entregado">✔ OK TODO</button>
+                </div>
+            </div>`;
+        }
+        document.getElementById('resumen_loc').innerHTML = html;
+        document.getElementById('modalAdmin').style.display = 'block';
+    }
+
+    window.generarReporte = (t) => {
+        const hoy = new Date().toLocaleDateString();
+        const mes = (new Date().getMonth() + 1).toString().padStart(2, '0');
+        descargarCSV(window.historialGlobal.filter(g => t==='hoy' ? g.fecha===hoy : g.fecha.split('/')[1]===mes), `MOULIN_${t.toUpperCase()}`);
+    };
+
+    function descargarCSV(datos, nombre) {
+        let csv = "\uFEFFFECHA;GUIA;REM;DEST;TOTAL;ESTADO\n";
+        datos.forEach(g => csv += `${g.fecha};${g.num};${g.r_n};${g.d_n};${g.total};${g.estado}\n`);
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+        link.download = `${nombre}.csv`; link.click();
+    }
+
+    function imprimir(g) {
+        let itemsHTML = g.items.map(i => `<tr><td>${i.c}</td><td>${i.t}</td><td>${i.d}</td></tr>`).join('');
+        let html = "";
+        ['ORIGINAL', 'DUPLICADO'].forEach(tipo => {
+            html += `<div class="cupon">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <img src="logo.png" style="height:35px" onerror="this.src='https://via.placeholder.com/100x35?text=MOULIN'">
+                    <div style="text-align:right"><b style="font-size:10px;">${tipo}</b><br><b style="font-size:18px; color:red;">GUÍA: ${g.num}</b></div>
+                </div>
+                <h3 style="margin:2px 0; text-align:center; border-top:1px solid #000; font-size:14px;">TRANSPORTE MOULIN</h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; padding:4px; font-size:10px; margin-top:2px;">
+                    <div><b>REMITENTE:</b> ${g.r_n}<br>Loc: ${g.r_l}</div><div><b>DESTINATARIO:</b> ${g.d_n}<br>Loc: ${g.d_l}</div>
+                </div>
+                <table border="1" style="width:100%; border-collapse:collapse; margin-top:3px; font-size:10px;">
+                    <thead><tr style="background:#eee;"><th width="10%">Cant</th><th width="20%">Tipo</th><th>Detalle</th></tr></thead><tbody>${itemsHTML}</tbody>
+                </table>
+                <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:10px;">
+                    <div>Pago: ${g.pago_en}<br>Condición: ${g.condicion}</div>
+                    <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | CR: $${g.cr}<br><b style="font-size:13px;">TOTAL A COBRAR: $${g.total}</b></div>
+                </div>
+                <div style="margin-top:10px; border-top:1px dashed #999; font-size:8px; text-align:center; padding-top:5px;">Firma y Aclaración: _________________________________</div>
+            </div>`;
+        });
+        document.getElementById('seccion-impresion').innerHTML = html;
+        window.print();
+    }
+
+    window.reimprimir = (n) => imprimir(window.historialGlobal.find(x => x.num === n));
+    window.onload = () => { agregarFila(); if(ROL!=='admin')document.getElementById('btn_admin').style.display='none'; };
+</script>
+</body>
+</html>
