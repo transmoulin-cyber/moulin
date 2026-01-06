@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso - Moulin Cloud</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #102a43; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 300px; text-align: center; }
+        img { width: 150px; margin-bottom: 20px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #1a4a7a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #2a5a8a; }
+        .error { color: red; font-size: 12px; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="login-card">
+    <img src="logo.png" alt="Moulin" onerror="this.src='https://via.placeholder.com/150x50?text=MOULIN'">
+    <h2>SISTEMA CLOUD</h2>
+    <input type="text" id="user" placeholder="Usuario">
+    <input type="password" id="pass" placeholder="Contraseña">
+    <button onclick="login()">INGRESAR</button>
+    <div id="errorMsg" class="error">Usuario o contraseña incorrectos</div>
+</div>
+
+<script>
+    const usuarios = {
+        "admin": { pass: "moulin2024", nombre: "Administrador", rol: "admin", prefijo: "RECO" },
+        "reco":  { pass: "reco123", nombre: "Reconquista", rol: "sucursal", prefijo: "RECO" },
+        "avel":  { pass: "avel123", nombre: "Avellaneda", rol: "sucursal", prefijo: "AVEL" },
+        "sfe":   { pass: "sfe123", nombre: "Santa Fe", rol: "sucursal", prefijo: "SFE" },
+        "ros":   { pass: "ros123", nombre: "Rosario", rol: "sucursal", prefijo: "ROS" }
+    };
+
+    function login() {
+        const u = document.getElementById('user').value.toLowerCase();
+        const p = document.getElementById('pass').value;
+        const error = document.getElementById('errorMsg');
+
+        if (usuarios[u] && usuarios[u].pass === p) {
+            // Guardamos la sesión (se borra al cerrar el navegador)
+            sessionStorage.setItem('moulin_sesion', JSON.stringify(usuarios[u]));
+            // Redirigimos al archivo de las guías (V70)
+            // Asegúrate de que el archivo de las guías se llame sistema.html o cambia el nombre aquí abajo
+            window.location.href = "sistema.html"; 
+        } else {
+            error.style.display = "block";
+        }
+    }
+</script>
+</body>
+</html>
