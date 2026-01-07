@@ -51,7 +51,7 @@
                 timestamp: Date.now(),
                 r_n: document.getElementById('r_n').value, r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value,
                 d_n: document.getElementById('d_n').value, d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value,
-                flete: d.flete.toFixed(2), seg: d.seg.toFixed(2), cr: d.cr.toFixed(2), total: d.total.toFixed(2),
+                flete: d.flete.toFixed(2), seg: d.seg.toFixed(2), cr: d.cr.toFixed(2), total: d.total.toFixed(2), v_decl: d.v_decl.toFixed(2),
                 pago_en: document.getElementById('pago_en').value, condicion: document.getElementById('condicion').value,
                 estado: 'recibido', emisor: NOMBRE,
                 items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(r => ({
@@ -95,17 +95,18 @@
             .no-print { display: none !important; } 
             #seccion-impresion { 
                 display: block !important; 
-                transform: scale(0.94); /* Achicamos al 94% para seguridad total */
+                transform: scale(0.93); 
                 transform-origin: top center; 
             }
             .cupon { 
                 border: 2px solid #000; 
-                padding: 10px; 
-                height: 12.2cm; /* Bajamos de 12.8 a 12.2 */
-                margin-bottom: 0.3cm; 
+                padding: 8px; 
+                height: 12.5cm; 
+                margin-bottom: 0.2cm; 
                 box-sizing: border-box; 
                 width: 100%; 
                 page-break-inside: avoid;
+                overflow: hidden;
             }
             .resaltado-cobro { 
                 background-color: #dddddd !important; 
@@ -116,6 +117,7 @@
                 font-weight: bold;
                 font-size: 12px !important;
             }
+            .mini-print { font-size: 9px; line-height: 1.1; }
         }
         #seccion-impresion { display: none; }
     </style>
@@ -206,7 +208,7 @@
         let cr = document.getElementById('cr_act').value === 'S' ? d * (parseFloat(document.getElementById('p_cr').value)/100) : 0;
         let t = f + s + cr;
         document.getElementById('total_txt').innerText = `TOTAL: $ ${t.toLocaleString('es-AR')}`;
-        return {flete: f, seg: s, cr: cr, total: t};
+        return {flete: f, seg: s, cr: cr, total: t, v_decl: d};
     }
 
     function imprimir(g) {
@@ -218,19 +220,19 @@
                     <img src="logo.png" style="height:35px" onerror="this.src='https://via.placeholder.com/100x35?text=MOULIN'">
                     <div style="text-align:right"><b style="font-size:10px;">${tipo}</b><br><b style="font-size:18px; color:red;">GUÍA: ${g.num}</b></div>
                 </div>
-                <h3 style="margin:2px 0; text-align:center; border-top:1px solid #000; font-size:14px;">TRANSPORTE MOULIN</h3>
-                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; padding:4px; font-size:11px; margin-top:2px;">
-                    <div><b>REMITENTE:</b> ${g.r_n}<br>Loc: <span class="resaltado-cobro">${g.r_l}</span></div>
-                    <div><b>DESTINATARIO:</b> ${g.d_n}<br>Loc: <span class="resaltado-cobro">${g.d_l}</span></div>
+                <h3 style="margin:2px 0; text-align:center; border-top:1px solid #000; font-size:13px;">TRANSPORTE MOULIN</h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; padding:4px; margin-top:2px;">
+                    <div class="mini-print"><b>REMITENTE:</b> ${g.r_n}<br>Dir: ${g.r_d} | Tel: ${g.r_t}<br>Loc: <span class="resaltado-cobro">${g.r_l}</span></div>
+                    <div class="mini-print"><b>DESTINATARIO:</b> ${g.d_n}<br>Dir: ${g.d_d} | Tel: ${g.d_t}<br>Loc: <span class="resaltado-cobro">${g.d_l}</span></div>
                 </div>
-                <table border="1" style="width:100%; border-collapse:collapse; margin-top:3px; font-size:11px;">
+                <table border="1" style="width:100%; border-collapse:collapse; margin-top:3px; font-size:10px;">
                     <thead><tr style="background:#eee;"><th width="10%">Cant</th><th width="20%">Tipo</th><th>Detalle</th></tr></thead><tbody>${itemsHTML}</tbody>
                 </table>
-                <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:11px;">
-                    <div>Pago: <span class="resaltado-cobro">${g.pago_en}</span><br>Condición: <span class="resaltado-cobro">${g.condicion}</span></div>
+                <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:10px; align-items: flex-end;">
+                    <div class="mini-print">Pago: <span class="resaltado-cobro">${g.pago_en}</span><br>Condición: <span class="resaltado-cobro">${g.condicion}</span><br><b>VALOR DECLARADO: $${g.v_decl || 0}</b></div>
                     <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | CR: $${g.cr}<br><b style="font-size:14px;">TOTAL A COBRAR: $${g.total}</b></div>
                 </div>
-                <div style="margin-top:10px; border-top:1px dashed #999; font-size:9px; text-align:center; padding-top:5px;">Firma y Aclaración: _________________________________</div>
+                <div style="margin-top:8px; border-top:1px dashed #999; font-size:8px; text-align:center; padding-top:4px;">Firma y Aclaración: _________________________________</div>
             </div>`;
         });
         document.getElementById('seccion-impresion').innerHTML = html;
