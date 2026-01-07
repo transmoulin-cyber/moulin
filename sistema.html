@@ -41,12 +41,9 @@
             renderHistorial();
         });
 
-        // MEJORA 1: CONFIRMACIÓN ANTES DE EMITIR
         window.confirmarYEmitir = function() {
             if(!document.getElementById('r_n').value || !document.getElementById('d_n').value) return alert("Faltan datos.");
-            
             if(!confirm("¿Desea grabar en la nube e imprimir esta guía?")) return;
-
             const d = calcularTotales();
             const guia = {
                 num: `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`,
@@ -66,54 +63,17 @@
 
         window.actualizarEstadoNube = (id, est) => { update(ref(db, `moulin/guias/${id}`), { estado: est }); };
         
-        window.finalizarTodoCiudad = async (pref) => {
-            if(!confirm(`¿Marcar TODAS las guías de ${pref} como ENTREGADAS?`)) return;
-            const aProcesar = window.historialGlobal.filter(g => g.num.startsWith(pref) && g.estado !== 'entregado');
-            for(let g of aProcesar) { await update(ref(db, `moulin/guias/${g.firebaseID}`), { estado: 'entregado' }); }
-            alert("Ciudad actualizada.");
-        };
-
-        window.cambiarFiltro = (val, btn) => {
-            window.filtroEstado = val;
-            document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            renderHistorial();
-        };
-
-        window.archivarNube = async () => {
-            if(!confirm("¿Descargar backup y BORRAR TODO el historial?")) return;
-            descargarCSV(window.historialGlobal, "BACKUP_MOULIN");
-            for(let g of window.historialGlobal) { await remove(ref(db, `moulin/guias/${g.firebaseID}`)); }
-            alert("Nube limpia.");
-        };
-
-        // MEJORA 2: PRIVACIDAD POR SUCURSAL EN EL RENDER
         window.renderHistorial = function() {
             const b = document.getElementById('busq').value.toLowerCase();
             const data = window.historialGlobal || [];
             const filtrados = data.filter(g => {
-                // Filtro de Sucursal: Si no es admin, solo ve su prefijo
                 const perteneceSucursal = (ROL === 'admin') || g.num.startsWith(PREFIJO);
-                
                 const mB = g.num.toLowerCase().includes(b) || (g.r_n && g.r_n.toLowerCase().includes(b));
                 const mE = window.filtroEstado === 'todos' || g.estado === window.filtroEstado;
                 return perteneceSucursal && mB && mE;
             });
             document.getElementById('contador').innerText = `${filtrados.length} guías`;
-            document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `<tr>
-                <td><b>${g.num}</b><br><small>${g.fecha}</small></td>
-                <td>${g.r_n} > ${g.d_n}</td>
-                <td>$${g.total}</td>
-                <td>
-                    <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:10px;">
-                        <option value="recibido" ${g.estado==='recibido'?'selected':''}>RECIBIDO</option>
-                        <option value="deposito" ${g.estado==='deposito'?'selected':''}>DEPÓSITO</option>
-                        <option value="entregado" ${g.estado==='entregado'?'selected':''}>ENTREGADO</option>
-                        <option value="error" ${g.estado==='error'?'selected':''}>ERROR</option>
-                    </select>
-                </td>
-                <td><button onclick="reimprimir('${g.num}')">🖨️</button></td>
-            </tr>`).join('');
+            document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `<tr><td><b>${g.num}</b><br><small>${g.fecha}</small></td><td>${g.r_n} > ${g.d_n}</td><td>$${g.total}</td><td><select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:10px;"><option value="recibido" ${g.estado==='recibido'?'selected':''}>RECIBIDO</option><option value="deposito" ${g.estado==='deposito'?'selected':''}>DEPÓSITO</option><option value="entregado" ${g.estado==='entregado'?'selected':''}>ENTREGADO</option><option value="error" ${g.estado==='error'?'selected':''}>ERROR</option></select></td><td><button onclick="reimprimir('${g.num}')">🖨️</button></td></tr>`).join('');
         };
     </script>
 
@@ -129,16 +89,33 @@
         .tabla-items th { background: var(--azul); color: white; padding: 5px; text-align: left; }
         .barra-fija { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--oscuro); color: white; padding: 10px; display: flex; justify-content: space-around; align-items: center; z-index: 1000; }
         .btn-imprimir { background: var(--verde); color: white; border: none; padding: 10px 30px; border-radius: 20px; font-size: 18px; font-weight: bold; cursor: pointer; }
-        .btn-filtro { padding: 5px 10px; border-radius: 12px; border: 1px solid #ccc; cursor: pointer; background: white; font-size: 10px; }
-        .btn-filtro.active { background: var(--azul); color: white; border-color: var(--azul); }
         
         @media print { 
-            @page { margin: 0; size: A4; }
+            @page { margin: 0.5cm; size: A4 portrait; }
             .no-print { display: none !important; } 
-            #seccion-impresion { display: block !important; transform: scale(0.95); transform-origin: top center; }
-            .cupon { border: 2px solid #000; padding: 8px; height: 13.5cm; margin: 0.2cm auto; box-sizing: border-box; overflow: hidden; width: 96%; }
-            /* MEJORA 3: LETRA GRANDE EN IMPRESION */
-            .print-label-big { font-size: 14px !important; background: #eee; padding: 2px; }
+            #seccion-impresion { 
+                display: block !important; 
+                transform: scale(0.92); 
+                transform-origin: top center; 
+            }
+            .cupon { 
+                border: 2px solid #000; 
+                padding: 10px; 
+                height: 12.8cm; 
+                margin-bottom: 0.5cm; 
+                box-sizing: border-box; 
+                width: 100%; 
+                page-break-inside: avoid;
+            }
+            .resaltado-cobro { 
+                background-color: #dddddd !important; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact;
+                border: 1px solid #999;
+                padding: 1px 3px;
+                font-weight: bold;
+                font-size: 13px !important;
+            }
         }
         #seccion-impresion { display: none; }
     </style>
@@ -232,37 +209,6 @@
         return {flete: f, seg: s, cr: cr, total: t};
     }
 
-    function abrirAdmin() {
-        const res = { "RECO": 0, "AVEL": 0, "SFE": 0, "ROS": 0 };
-        window.historialGlobal.forEach(g => { const p = g.num.split('-')[0]; if(res.hasOwnProperty(p)) res[p] += parseFloat(g.total); });
-        let html = "";
-        for (let loc in res) {
-            html += `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee; font-size:12px; align-items:center;">
-                <b>${loc}: $${res[loc].toLocaleString()}</b>
-                <div>
-                    <button onclick="descargarCSV(window.historialGlobal.filter(g=>g.num.startsWith('${loc}')), 'REPORTE_${loc}')" title="Descargar CSV">📥</button>
-                    <button onclick="finalizarTodoCiudad('${loc}')" style="background:var(--verde); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:9px; cursor:pointer;" title="Marcar todo como Entregado">✔ OK TODO</button>
-                </div>
-            </div>`;
-        }
-        document.getElementById('resumen_loc').innerHTML = html;
-        document.getElementById('modalAdmin').style.display = 'block';
-    }
-
-    window.generarReporte = (t) => {
-        const hoy = new Date().toLocaleDateString();
-        const mes = (new Date().getMonth() + 1).toString().padStart(2, '0');
-        descargarCSV(window.historialGlobal.filter(g => t==='hoy' ? g.fecha===hoy : g.fecha.split('/')[1]===mes), `MOULIN_${t.toUpperCase()}`);
-    };
-
-    function descargarCSV(datos, nombre) {
-        let csv = "\uFEFFFECHA;GUIA;REM;DEST;TOTAL;ESTADO\n";
-        datos.forEach(g => csv += `${g.fecha};${g.num};${g.r_n};${g.d_n};${g.total};${g.estado}\n`);
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
-        link.download = `${nombre}.csv`; link.click();
-    }
-
     function imprimir(g) {
         let itemsHTML = g.items.map(i => `<tr><td>${i.c}</td><td>${i.t}</td><td>${i.d}</td></tr>`).join('');
         let html = "";
@@ -273,18 +219,18 @@
                     <div style="text-align:right"><b style="font-size:10px;">${tipo}</b><br><b style="font-size:18px; color:red;">GUÍA: ${g.num}</b></div>
                 </div>
                 <h3 style="margin:2px 0; text-align:center; border-top:1px solid #000; font-size:14px;">TRANSPORTE MOULIN</h3>
-                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; padding:4px; font-size:10px; margin-top:2px;">
-                    <div><b class="print-label-big">REMITENTE:</b> ${g.r_n}<br>Loc: ${g.r_l}</div>
-                    <div><b class="print-label-big">DESTINATARIO:</b> ${g.d_n}<br>Loc: ${g.d_l}</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; padding:4px; font-size:11px; margin-top:2px;">
+                    <div><b>REMITENTE:</b> ${g.r_n}<br>Loc: <span class="resaltado-cobro">${g.r_l}</span></div>
+                    <div><b>DESTINATARIO:</b> ${g.d_n}<br>Loc: <span class="resaltado-cobro">${g.d_l}</span></div>
                 </div>
-                <table border="1" style="width:100%; border-collapse:collapse; margin-top:3px; font-size:10px;">
+                <table border="1" style="width:100%; border-collapse:collapse; margin-top:3px; font-size:11px;">
                     <thead><tr style="background:#eee;"><th width="10%">Cant</th><th width="20%">Tipo</th><th>Detalle</th></tr></thead><tbody>${itemsHTML}</tbody>
                 </table>
-                <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:10px;">
-                    <div>Pago: ${g.pago_en}<br>Condición: ${g.condicion}</div>
-                    <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | CR: $${g.cr}<br><b style="font-size:13px;">TOTAL A COBRAR: $${g.total}</b></div>
+                <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:11px;">
+                    <div>Pago: <span class="resaltado-cobro">${g.pago_en}</span><br>Condición: <span class="resaltado-cobro">${g.condicion}</span></div>
+                    <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | CR: $${g.cr}<br><b style="font-size:14px;">TOTAL A COBRAR: $${g.total}</b></div>
                 </div>
-                <div style="margin-top:10px; border-top:1px dashed #999; font-size:8px; text-align:center; padding-top:5px;">Firma y Aclaración: _________________________________</div>
+                <div style="margin-top:12px; border-top:1px dashed #999; font-size:9px; text-align:center; padding-top:5px;">Firma y Aclaración: _________________________________</div>
             </div>`;
         });
         document.getElementById('seccion-impresion').innerHTML = html;
@@ -292,6 +238,8 @@
     }
 
     window.reimprimir = (n) => imprimir(window.historialGlobal.find(x => x.num === n));
+    function cambiarFiltro(val, btn) { window.filtroEstado = val; document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active')); btn.classList.add('active'); renderHistorial(); }
+    function abrirAdmin() { const res = { "RECO": 0, "AVEL": 0, "SFE": 0, "ROS": 0 }; window.historialGlobal.forEach(g => { const p = g.num.split('-')[0]; if(res.hasOwnProperty(p)) res[p] += parseFloat(g.total); }); let html = ""; for (let loc in res) { html += `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee; font-size:12px; align-items:center;"><b>${loc}: $${res[loc].toLocaleString()}</b><div><button onclick="descargarCSV(window.historialGlobal.filter(g=>g.num.startsWith('${loc}')), 'REPORTE_${loc}')">📥</button> <button onclick="finalizarTodoCiudad('${loc}')" style="background:var(--verde); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:9px; cursor:pointer;">✔ OK TODO</button></div></div>`; } document.getElementById('resumen_loc').innerHTML = html; document.getElementById('modalAdmin').style.display = 'block'; }
     window.onload = () => { agregarFila(); if(ROL!=='admin')document.getElementById('btn_admin').style.display='none'; };
 </script>
 </body>
