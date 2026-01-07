@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>SISTEMA MOULIN V70 - FORMATO TROQUELADO</title>
+    <title>MOULIN CLOUD V70 - SISTEMA COMPLETO</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getDatabase, ref, set, push, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
@@ -28,6 +28,7 @@
 
         window.historialGlobal = [];
         window.clientesGlobal = {}; 
+        window.filtroEstado = 'todos';
         let proximoNumero = 1001;
 
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
@@ -82,48 +83,39 @@
             updates[`moulin/clientes/${guia.d_n}`] = { t: guia.d_t, cbu: guia.d_cbu, d: guia.d_d, l: guia.d_l };
             update(ref(db), updates).then(() => { imprimir(guia); setTimeout(() => location.reload(), 500); });
         };
+
+        window.actualizarEstadoNube = (id, est) => { update(ref(db, `moulin/guias/${id}`), { estado: est }); };
+
+        window.renderHistorial = function() {
+            const b = document.getElementById('busq').value.toLowerCase();
+            const filtrados = window.historialGlobal.filter(g => {
+                const p = (ROL === 'admin') || g.num.startsWith(PREFIJO);
+                const m = g.num.toLowerCase().includes(b) || (g.r_n && g.r_n.toLowerCase().includes(b));
+                const e = window.filtroEstado === 'todos' || g.estado === window.filtroEstado;
+                return p && m && e;
+            });
+            document.getElementById('contador').innerText = `${filtrados.length} guías`;
+            document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `<tr><td><b>${g.num}</b><br><small>${g.fecha}</small></td><td>${g.r_n} > ${g.d_n}</td><td>$${g.total}</td><td><select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:10px;"><option value="recibido" ${g.estado==='recibido'?'selected':''}>RECIBIDO</option><option value="deposito" ${g.estado==='deposito'?'selected':''}>DEPÓSITO</option><option value="entregado" ${g.estado==='entregado'?'selected':''}>ENTREGADO</option></select></td><td><button onclick="reimprimir('${g.num}')">🖨️</button></td></tr>`).join('');
+        };
     </script>
 
     <style>
         :root { --azul: #1a4a7a; --oscuro: #102a43; --verde: #38a169; --rojo: #d32f2f; }
-        body { font-family: Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 10px; }
-        .hoja { background: white; max-width: 1000px; margin: auto; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .no-print { display: block; }
-        input, select { width: 92%; padding: 5px; font-size: 12px; margin-bottom: 3px; border: 1px solid #ccc; }
+        body { font-family: Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 10px; padding-bottom: 80px; }
+        .hoja { background: white; max-width: 900px; margin: auto; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .caja { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; margin-bottom: 8px; border-radius: 5px; }
+        input, select { width: 92%; padding: 5px; font-size: 12px; margin-bottom: 3px; border: 1px solid #ccc; border-radius: 3px; }
         .tabla-items { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .tabla-items th { background: var(--azul); color: white; padding: 5px; }
+        .tabla-items th { background: var(--azul); color: white; padding: 5px; text-align: left; }
+        .btn-imprimir { background: var(--verde); color: white; border: none; padding: 10px 30px; border-radius: 20px; font-size: 18px; font-weight: bold; cursor: pointer; }
         
-        /* DISEÑO DE IMPRESIÓN ESPECIAL TROQUELADO */
         @media print {
             @page { size: 21.5cm 14.7cm landscape; margin: 0; }
-            body { background: white; padding: 0; margin: 0; }
             .no-print { display: none !important; }
-            #seccion-impresion { 
-                display: flex !important; 
-                width: 21.5cm; 
-                height: 14.7cm; 
-                box-sizing: border-box;
-                border: 1px solid transparent; /* Para guía de corte si fuera necesario */
-            }
-            .zona-chofer { 
-                width: 16.5cm; 
-                height: 14.7cm; 
-                padding: 0.5cm;
-                border-right: 1px dashed #ccc; /* Marca del troquel */
-                box-sizing: border-box;
-            }
-            .zona-cliente { 
-                width: 5cm; 
-                height: 14.7cm; 
-                padding: 0.3cm;
-                box-sizing: border-box;
-                background: #fff;
-                font-size: 10px;
-            }
-            .mini-print { font-size: 10px; line-height: 1.2; }
-            .resaltado { background: #eee !important; -webkit-print-color-adjust: exact; font-weight: bold; padding: 2px; }
-            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 5px; }
-            table border { border: 1px solid black; }
+            #seccion-impresion { display: flex !important; width: 21.5cm; height: 14.7cm; }
+            .zona-chofer { width: 16.5cm; height: 14.7cm; padding: 0.5cm; border-right: 1px dashed #000; box-sizing: border-box; }
+            .zona-cliente { width: 5cm; height: 14.7cm; padding: 0.4cm; box-sizing: border-box; text-align: center; }
+            .resaltado { background: #eee !important; -webkit-print-color-adjust: exact; padding: 2px; font-weight: bold; }
         }
         #seccion-impresion { display: none; }
     </style>
@@ -133,50 +125,49 @@
 <datalist id="lista_clientes"></datalist>
 
 <div class="hoja no-print">
-    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--azul); margin-bottom: 10px;">
-        <h2>MOULIN CLOUD V70</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid var(--azul); margin-bottom:10px;">
+        <h2 style="margin:0;">MOULIN V70</h2>
         <b id="display_guia" style="font-size:24px; color:var(--rojo)">...</b>
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <div style="background:#f9f9f9; padding:10px; border-radius:5px;">
-            <label style="font-size:10px; font-weight:bold;">REMITENTE</label>
-            <input type="text" id="r_n" placeholder="Nombre" list="lista_clientes" autocomplete="off" oninput="completarCliente('r')">
-            <div style="display:flex; gap:3px"><input type="text" id="r_t" placeholder="Tel"><input type="text" id="r_cbu" placeholder="CBU/Alias"></div>
-            <div style="display:flex; gap:3px"><input type="text" id="r_d" placeholder="Dir"><input type="text" id="r_l" placeholder="Loc"></div>
+        <div class="caja"><label><b>REMITENTE</b></label><input type="text" id="r_n" list="lista_clientes" autocomplete="off" oninput="completarCliente('r')"><div style="display:flex; gap:3px"><input type="text" id="r_t" placeholder="Tel"><input type="text" id="r_cbu" placeholder="CBU"></div><div style="display:flex; gap:3px"><input type="text" id="r_d" placeholder="Dir"><input type="text" id="r_l" placeholder="Loc"></div></div>
+        <div class="caja"><label><b>DESTINATARIO</b></label><input type="text" id="d_n" list="lista_clientes" autocomplete="off" oninput="completarCliente('d')"><div style="display:flex; gap:3px"><input type="text" id="d_t" placeholder="Tel"><input type="text" id="d_cbu" placeholder="CBU"></div><div style="display:flex; gap:3px"><input type="text" id="d_d" placeholder="Dir"><input type="text" id="d_l" placeholder="Loc"></div></div>
+    </div>
+
+    <div class="caja">
+        <table class="tabla-items">
+            <thead><tr><th width="10%">CANT</th><th width="20%">TIPO</th><th>DETALLE</th><th width="15%">UNIT $</th><th></th></tr></thead>
+            <tbody id="cuerpoItems"></tbody>
+        </table>
+        <button onclick="agregarFila()" style="margin:5px 0;">+ Item</button>
+        <div style="display:grid; grid-template-columns: repeat(5,1fr); gap:5px; margin-top:5px;">
+            <input type="number" id="p_seg" value="0.8"> <input type="number" id="p_cr" value="5.0">
+            <select id="cr_act" onchange="calcularTotales()"><option value="N">CR NO</option><option value="S">CR SI</option></select>
+            <select id="pago_en"><option>ORIGEN</option><option>DESTINO</option></select>
+            <select id="condicion"><option>CONTADO</option><option>CTA CTE</option></select>
         </div>
-        <div style="background:#f9f9f9; padding:10px; border-radius:5px;">
-            <label style="font-size:10px; font-weight:bold;">DESTINATARIO</label>
-            <input type="text" id="d_n" placeholder="Nombre" list="lista_clientes" autocomplete="off" oninput="completarCliente('d')">
-            <div style="display:flex; gap:3px"><input type="text" id="d_t" placeholder="Tel"><input type="text" id="d_cbu" placeholder="CBU/Alias"></div>
-            <div style="display:flex; gap:3px"><input type="text" id="d_d" placeholder="Dir"><input type="text" id="d_l" placeholder="Loc"></div>
+    </div>
+
+    <div class="caja" style="max-height: 250px; overflow-y: auto;">
+        <div style="display:flex; gap:5px; margin-bottom:5px;">
+            <input type="text" id="busq" placeholder="🔍 Buscar guía o nombre..." oninput="renderHistorial()">
+            <span id="contador" style="font-size:12px; font-weight:bold;"></span>
         </div>
+        <table class="tabla-items">
+            <tbody id="listaHistorial"></tbody>
+        </table>
     </div>
+</div>
 
-    <table class="tabla-items" style="margin-top:10px;">
-        <thead><tr><th>CANT</th><th>TIPO</th><th>DETALLE</th><th>UNIT $</th><th>DECL $</th><th></th></tr></thead>
-        <tbody id="cuerpoItems"></tbody>
-    </table>
-    <button onclick="agregarFila()" style="margin: 10px 0;">+ Agregar Item</button>
-
-    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; background:#eee; padding:10px; border-radius:5px;">
-        <div><label style="font-size:9px;">Seg %</label><input type="number" id="p_seg" value="0.8"></div>
-        <div><label style="font-size:9px;">CR %</label><input type="number" id="p_cr" value="5.0"></div>
-        <div><label style="font-size:9px;">CR Activo?</label><select id="cr_act" onchange="calcularTotales()"><option value="N">NO</option><option value="S">SÍ</option></select></div>
-        <div><label style="font-size:9px;">Pago</label><select id="pago_en"><option>ORIGEN</option><option>DESTINO</option></select></div>
-        <div><label style="font-size:9px;">Cond.</label><select id="condicion"><option>CONTADO</option><option>CTA CTE</option></select></div>
-    </div>
-
-    <div style="position:fixed; bottom:0; left:0; width:100%; background:var(--oscuro); color:white; padding:15px; display:flex; justify-content:space-around; align-items:center;">
-        <div id="total_txt" style="font-size:22px; font-weight:bold; color:#48bb78;">TOTAL: $ 0.00</div>
-        <button onclick="confirmarYEmitir()" style="background:var(--verde); color:white; border:none; padding:10px 40px; border-radius:30px; font-weight:bold; cursor:pointer;">EMITIR E IMPRIMIR</button>
-    </div>
+<div style="position:fixed; bottom:0; left:0; width:100%; background:var(--oscuro); color:white; padding:10px; display:flex; justify-content:space-around; align-items:center; z-index:100;" class="no-print">
+    <div id="total_txt" style="font-size:20px; font-weight:bold; color:#48bb78;">TOTAL: $ 0.00</div>
+    <button class="btn-imprimir" onclick="confirmarYEmitir()">EMITIR E IMPRIMIR</button>
 </div>
 
 <div id="seccion-impresion"></div>
 
 <script>
-    // Lógica de cálculo y filas (mantenida igual)
     function actualizarValorPorTipo(select) {
         const fila = select.closest('tr');
         const u = fila.querySelector('.i-unit');
@@ -187,67 +178,46 @@
     }
     function agregarFila() {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo" onchange="actualizarValorPorTipo(this)"><option value="Bulto">Bulto</option><option value="Pallet">Pallet</option><option value="Sobre">Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
+        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo" onchange="actualizarValorPorTipo(this)"><option value="Bulto">Bulto</option><option value="Pallet">Pallet</option><option value="Sobre">Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" style="display:none"><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
         document.getElementById('cuerpoItems').appendChild(tr);
         calcularTotales();
     }
     function calcularTotales() {
-        let f = 0, d = 0;
-        document.querySelectorAll('#cuerpoItems tr').forEach(r => {
-            f += (parseFloat(r.querySelector('.i-cant').value)||0)*(parseFloat(r.querySelector('.i-unit').value)||0);
-            d += (parseFloat(r.querySelector('.i-decl').value)||0);
-        });
-        let s = d * (parseFloat(document.getElementById('p_seg').value)/100 || 0);
-        let cr = document.getElementById('cr_act').value === 'S' ? d * (parseFloat(document.getElementById('p_cr').value)/100) : 0;
-        let t = f + s + cr;
-        document.getElementById('total_txt').innerText = `TOTAL: $ ${t.toLocaleString('es-AR')}`;
-        return {flete: f, seg: s, cr: cr, total: t, v_decl: d};
+        let f = 0; document.querySelectorAll('#cuerpoItems tr').forEach(r => { f += (parseFloat(r.querySelector('.i-cant').value)||0)*(parseFloat(r.querySelector('.i-unit').value)||0); });
+        document.getElementById('total_txt').innerText = `TOTAL: $ ${f.toLocaleString('es-AR')}`;
+        return {flete: f, seg: 0, cr: 0, total: f, v_decl: 0};
     }
-
     function imprimir(g) {
-        let itemsHTML = g.items.map(i => `<tr><td>${i.c}</td><td>${i.t}</td><td>${i.d}</td></tr>`).join('');
-        
+        let itms = g.items.map(i => `<tr><td>${i.c}</td><td>${i.t}</td><td>${i.d}</td><td>$${i.u}</td></tr>`).join('');
         document.getElementById('seccion-impresion').innerHTML = `
             <div class="zona-chofer">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <img src="logo.png" style="height:35px" onerror="this.src='https://via.placeholder.com/100x35?text=MOULIN'">
-                    <div style="text-align:right"><b>GUÍA DE CONTROL</b><br><b style="font-size:20px; color:red;">${g.num}</b></div>
+                <div style="display:flex; justify-content:space-between;">
+                    <img src="logo.png" style="height:40px" onerror="this.src='https://via.placeholder.com/100x40?text=MOULIN'">
+                    <div style="text-align:right"><b>HOJA DE RUTA</b><br><b style="font-size:22px; color:red;">${g.num}</b></div>
                 </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; border:1px solid #000; padding:5px; margin-top:5px;">
-                    <div class="mini-print"><b>REMITENTE:</b><br>${g.r_n}<br>${g.r_d} (${g.r_l})<br>Tel: ${g.r_t}</div>
-                    <div class="mini-print"><b>DESTINATARIO:</b><br>${g.d_n}<br>${g.d_d} (${g.d_l})<br>Tel: ${g.d_t}</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; padding:5px; margin:10px 0; font-size:11px;">
+                    <div><b>REMITENTE:</b><br>${g.r_n}<br>${g.r_d} (${g.r_l})</div>
+                    <div><b>DESTINATARIO:</b><br>${g.d_n}<br>${g.d_d} (${g.d_l})</div>
                 </div>
-                <table border="1">
-                    <thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th></tr></thead>
-                    <tbody>${itemsHTML}</tbody>
-                </table>
-                <div style="margin-top:10px; display:flex; justify-content:space-between;">
-                    <div class="mini-print">Pago: <span class="resaltado">${g.pago_en}</span> | Cond: <span class="resaltado">${g.condicion}</span></div>
-                    <div class="mini-print" style="text-align:right;"><b>TOTAL: $${g.total}</b></div>
-                </div>
+                <table border="1" style="font-size:11px;"><thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th></tr></thead><tbody>${itms}</tbody></table>
+                <div style="margin-top:10px; text-align:right; font-size:14px;"><b>TOTAL GUÍA: $${g.total}</b><br><small>Pago: ${g.pago_en}</small></div>
             </div>
-
             <div class="zona-cliente">
-                <div style="text-align:center; border-bottom:1px solid #000; margin-bottom:5px;">
-                    <b style="font-size:12px;">CLIENTE</b><br>
-                    <b style="font-size:14px; color:red;">${g.num}</b>
+                <div style="border-bottom:2px solid #000; padding-bottom:5px; margin-bottom:10px;">
+                    <b style="font-size:14px;">CLIENTE</b><br><b style="font-size:20px; color:red;">${g.num}</b>
                 </div>
-                <div class="mini-print">
+                <div style="text-align:left; font-size:11px;">
                     <b>FECHA:</b> ${g.fecha}<br><br>
                     <b>DESTINO:</b><br><span class="resaltado">${g.d_l}</span><br><br>
-                    <b>TOTAL:</b><br><span style="font-size:14px;">$${g.total}</span><br><br>
-                    <b>PAGO:</b> ${g.pago_en}<br><br>
-                    <b>BULTOS:</b> ${g.items.reduce((acc, current) => acc + parseInt(current.c), 0)}<br><br>
-                    <div style="border-top:1px dashed #000; margin-top:10px; padding-top:5px; font-size:8px;">
-                        Gracias por confiar en Transporte Moulin.
-                    </div>
+                    <b>TOTAL:</b><br><span style="font-size:16px; font-weight:bold;">$${g.total}</span><br><br>
+                    <b>BULTOS:</b> ${g.items.reduce((a,b)=>a+parseInt(b.c),0)}<br><br>
+                    <b>PAGO:</b> ${g.pago_en}
                 </div>
-            </div>
-        `;
+            </div>`;
         window.print();
     }
-    window.onload = () => { agregarFila(); if(ROL!=='admin')document.getElementById('btn_admin').style.display='none'; };
-    window.renderHistorial = () => {}; // Simplificado para esta versión
+    window.reimprimir = (n) => imprimir(window.historialGlobal.find(x => x.num === n));
+    window.onload = () => { agregarFila(); };
 </script>
 </body>
 </html>
