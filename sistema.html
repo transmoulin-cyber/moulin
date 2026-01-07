@@ -2,286 +2,400 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>SISTEMA MOULIN CLOUD V70 - CONTROL TOTAL</title>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-        import { getDatabase, ref, set, push, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyCAsCocDQjimpjNo5l2oHTGO82XNTG7tzY",
-            authDomain: "transporte-moulin.firebaseapp.com",
-            databaseURL: "https://transporte-moulin-default-rtdb.firebaseio.com",
-            projectId: "transporte-moulin",
-            storageBucket: "transporte-moulin.firebasestorage.app",
-            messagingSenderId: "1022730425566",
-            appId: "1:1022730425566:web:1ec5b014b71d14ce579e4f"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-        const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
-        if (!sesion) { window.location.href = "index.html"; }
-
-        const PREFIJO = sesion.prefijo;
-        const NOMBRE = sesion.nombre;
-        const ROL = sesion.rol;
-
-        window.historialGlobal = [];
-        window.filtroEstado = 'todos';
-        let proximoNumero = 1001;
-
-        onValue(ref(db, 'moulin/guias'), (snapshot) => {
-            const data = snapshot.val();
-            window.historialGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
-            if (window.historialGlobal.length > 0) {
-                const todos = window.historialGlobal.map(g => parseInt(g.num.split('-')[1]) || 0);
-                proximoNumero = Math.max(...todos) + 1;
-            }
-            document.getElementById('display_guia').innerText = `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`;
-            renderHistorial();
-        });
-
-        window.confirmarYEmitir = function() {
-            if(!document.getElementById('r_n').value || !document.getElementById('d_n').value) return alert("Faltan datos.");
-            const d = calcularTotales();
-            const guia = {
-                num: `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`,
-                fecha: new Date().toLocaleDateString(),
-                timestamp: Date.now(),
-                r_n: document.getElementById('r_n').value, r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value,
-                d_n: document.getElementById('d_n').value, d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value,
-                flete: d.flete.toFixed(2), seg: d.seg.toFixed(2), cr: d.cr.toFixed(2), total: d.total.toFixed(2),
-                pago_en: document.getElementById('pago_en').value, condicion: document.getElementById('condicion').value,
-                estado: 'recibido', emisor: NOMBRE,
-                items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(r => ({
-                    c: r.querySelector('.i-cant').value, t: r.querySelector('.i-tipo').value, d: r.querySelector('.i-det').value, u: r.querySelector('.i-unit').value
-                }))
-            };
-            push(ref(db, 'moulin/guias'), guia).then(() => { imprimir(guia); setTimeout(() => location.reload(), 500); });
-        };
-
-        window.actualizarEstadoNube = (id, est) => { update(ref(db, `moulin/guias/${id}`), { estado: est }); };
-        
-        window.finalizarTodoCiudad = async (pref) => {
-            if(!confirm(`¿Marcar TODAS las guías de ${pref} como ENTREGADAS?`)) return;
-            const aProcesar = window.historialGlobal.filter(g => g.num.startsWith(pref) && g.estado !== 'entregado');
-            for(let g of aProcesar) { await update(ref(db, `moulin/guias/${g.firebaseID}`), { estado: 'entregado' }); }
-            alert("Ciudad actualizada.");
-        };
-
-        window.cambiarFiltro = (val, btn) => {
-            window.filtroEstado = val;
-            document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            renderHistorial();
-        };
-
-        window.archivarNube = async () => {
-            if(!confirm("¿Descargar backup y BORRAR TODO el historial?")) return;
-            descargarCSV(window.historialGlobal, "BACKUP_MOULIN");
-            for(let g of window.historialGlobal) { await remove(ref(db, `moulin/guias/${g.firebaseID}`)); }
-            alert("Nube limpia.");
-        };
-    </script>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión de Guías - Moulin Cloud</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        :root { --azul: #1a4a7a; --oscuro: #102a43; --verde: #38a169; --rojo: #d32f2f; }
-        body { font-family: Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 10px; padding-bottom: 110px; }
-        .hoja { background: white; max-width: 1000px; margin: auto; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--azul); margin-bottom: 10px; }
-        .caja { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; margin-bottom: 8px; border-radius: 5px; }
-        label { display: block; font-weight: bold; font-size: 10px; color: var(--azul); }
-        input, select { width: 92%; padding: 5px; border: 1px solid #ccc; font-size: 12px; margin-bottom: 3px; border-radius: 3px; }
-        .tabla-items { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .tabla-items th { background: var(--azul); color: white; padding: 5px; text-align: left; }
-        .barra-fija { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--oscuro); color: white; padding: 10px; display: flex; justify-content: space-around; align-items: center; z-index: 1000; }
-        .btn-imprimir { background: var(--verde); color: white; border: none; padding: 10px 30px; border-radius: 20px; font-size: 18px; font-weight: bold; cursor: pointer; }
-        .btn-filtro { padding: 5px 10px; border-radius: 12px; border: 1px solid #ccc; cursor: pointer; background: white; font-size: 10px; }
-        .btn-filtro.active { background: var(--azul); color: white; border-color: var(--azul); }
-        
-        @media print { 
-            @page { margin: 0; }
-            .no-print { display: none !important; } 
-            #seccion-impresion { display: block !important; }
-            .cupon { border: 2px solid #000; padding: 8px; height: 12.2cm; margin: 0.1cm auto; box-sizing: border-box; overflow: hidden; width: 96%; }
+        :root {
+            --primary: #102a43;
+            --secondary: #243b53;
+            --accent: #334e68;
+            --text: #f0f4f8;
+            --success: #27ae60;
         }
-        #seccion-impresion { display: none; }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        
+        /* Header y Navegación */
+        header { background: var(--primary); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .logout-btn { background: #cf3d3d; border: none; color: white; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        
+        .nav-tabs { background: var(--secondary); display: flex; padding: 0 20px; gap: 5px; }
+        .tab { padding: 12px 25px; color: #9fb3c8; cursor: pointer; border-bottom: 3px solid transparent; transition: 0.3s; font-weight: 600; }
+        .tab.active { color: white; border-bottom: 3px solid #62b1f6; background: rgba(255,255,255,0.1); }
+
+        .content { flex: 1; padding: 25px; overflow-y: auto; }
+        .panel { display: none; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 1000px; margin: auto; }
+        .panel.active { display: block; animation: fadeIn 0.3s; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Formulario */
+        .grid-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .full-width { grid-column: span 2; }
+        .field-group { display: flex; flex-direction: column; gap: 8px; }
+        label { font-weight: bold; color: var(--primary); font-size: 0.9rem; }
+        input, select, textarea { padding: 12px; border: 1px solid #d9e2ec; border-radius: 6px; font-size: 1rem; transition: 0.3s; }
+        input:focus { outline: none; border-color: #62b1f6; box-shadow: 0 0 0 3px rgba(98,177,246,0.2); }
+
+        .btn-emitir { background: var(--success); color: white; border: none; padding: 15px 30px; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 20px; width: 100%; transition: 0.3s; }
+        .btn-emitir:hover { background: #219150; transform: translateY(-2px); }
+
+        /* Historial */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #e1e8ed; }
+        th { background: #f8fafc; color: var(--primary); }
+        .status-pill { padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; background: #e3f9e5; color: #1f7a33; }
+
+        /* ESTILOS DE IMPRESIÓN MEJORADOS (PUNTO 3) */
+        @media print {
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea { 
+                position: absolute; 
+                left: 0; top: 0; width: 100%; 
+                margin: 0; padding: 20px;
+                background: white !important;
+            }
+            @page { 
+                size: A4; 
+                margin: 10mm; /* Márgenes de seguridad */
+            }
+            .no-print { display: none !important; }
+            
+            /* Ajuste para que entre en una hoja */
+            #printArea { transform: scale(0.95); transform-origin: top center; }
+        }
+
+        /* Diseño de la Guía Impresa */
+        #printArea { padding: 40px; border: 2px solid #333; color: black; background: #fff; width: 800px; margin: auto; border-radius: 8px; }
+        .print-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #000; padding-bottom: 15px; margin-bottom: 20px; }
+        .logo-box h1 { margin: 0; font-size: 2.5rem; letter-spacing: 2px; }
+        .guia-nro { text-align: right; }
+        .guia-nro h2 { margin: 0; color: #e63946; font-size: 1.8rem; }
+        
+        .print-section { margin-bottom: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+        .print-section h3 { 
+            border-bottom: 1px solid #000; 
+            margin-bottom: 10px; 
+            font-size: 1.2rem; /* Letra de origen/destino más grande */
+            text-transform: uppercase;
+            background: #eee;
+            padding: 5px;
+        }
+        .data-row { margin-bottom: 8px; font-size: 1.1rem; }
+        .data-label { font-weight: bold; width: 120px; display: inline-block; }
+        
+        .table-items { width: 100%; border: 1px solid #000; margin: 20px 0; }
+        .table-items th { background: #000; color: #fff; border: 1px solid #000; }
+        .table-items td { border: 1px solid #000; padding: 12px; font-size: 1.1rem; }
+        
+        .print-footer { margin-top: 50px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center; }
+        .signature-box { border-top: 1px solid #000; padding-top: 10px; margin-top: 40px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
-<div class="hoja no-print">
-    <div class="header">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <img src="logo.png" style="height:40px" onerror="this.src='https://via.placeholder.com/100x40?text=MOULIN'">
-            <h2 style="margin:0; font-size:18px;">MOULIN CLOUD V70</h2>
+<header>
+    <div class="logo">
+        <h2 style="margin:0">MOULIN <span style="font-weight:300; font-size: 1rem;">Logística Cloud</span></h2>
+    </div>
+    <div class="user-info">
+        <span id="display-user" style="background: #243b53; padding: 5px 12px; border-radius: 4px;"></span>
+        <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+    </div>
+</header>
+
+<div class="nav-tabs">
+    <div class="tab active" onclick="showPanel('nueva-guia')">NUEVA GUÍA</div>
+    <div class="tab" onclick="showPanel('historial'); updateTable();">HISTORIAL SUCURSAL</div>
+    <div id="admin-tab" class="tab" style="display:none" onclick="showPanel('admin')">PANEL CONTROL</div>
+</div>
+
+<div class="content">
+    <div id="nueva-guia" class="panel active">
+        <div class="grid-form">
+            <div class="field-group">
+                <label>FECHA</label>
+                <input type="date" id="fecha">
+            </div>
+            <div class="field-group">
+                <label>TIPO DE SERVICIO</label>
+                <select id="tipo-servicio">
+                    <option value="Paquetería">Paquetería</option>
+                    <option value="Carga General">Carga General</option>
+                    <option value="Paletizado">Paletizado</option>
+                    <option value="Urgente">Envío Urgente</option>
+                </select>
+            </div>
+
+            <div class="field-group">
+                <h3 style="margin-bottom:10px; color: #1a4a7a;">ORIGEN</h3>
+                <label>REMITENTE</label>
+                <input type="text" id="remitente" placeholder="Nombre o Razón Social">
+                <label>LOCALIDAD ORIGEN</label>
+                <input type="text" id="origen" placeholder="Ciudad">
+            </div>
+
+            <div class="field-group">
+                <h3 style="margin-bottom:10px; color: #1a4a7a;">DESTINO</h3>
+                <label>DESTINATARIO</label>
+                <input type="text" id="destinatario" placeholder="Nombre de quien recibe">
+                <label>LOCALIDAD DESTINO</label>
+                <input type="text" id="destino" placeholder="Ciudad">
+            </div>
+
+            <div class="field-group full-width">
+                <label>DESCRIPCIÓN DE CARGA / BULTOS</label>
+                <textarea id="descripcion" rows="3" placeholder="Ej: 5 cajas de repuestos, 2 pallets..."></textarea>
+            </div>
+
+            <div class="field-group">
+                <label>VALOR DECLARADO ($)</label>
+                <input type="number" id="valor" placeholder="0.00">
+            </div>
+            <div class="field-group">
+                <label>CONDICIÓN DE PAGO</label>
+                <select id="pago">
+                    <option value="Pagado en Origen">Pagado en Origen</option>
+                    <option value="Pago en Destino">Pago en Destino</option>
+                    <option value="Cuenta Corriente">Cuenta Corriente</option>
+                </select>
+            </div>
         </div>
-        <b id="display_guia" style="font-size:24px; color:var(--rojo)">...</b>
+        <button class="btn-emitir" onclick="confirmarEmision()">EMITIR E IMPRIMIR GUÍA</button>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <div class="caja"><label>REMITENTE</label><input type="text" id="r_n" placeholder="Nombre"><div style="display:flex; gap:3px"><input type="text" id="r_t" placeholder="Tel"><input type="text" id="r_cbu" placeholder="CBU/Alias"></div><div style="display:flex; gap:3px"><input type="text" id="r_d" placeholder="Dir"><input type="text" id="r_l" placeholder="Loc"></div></div>
-        <div class="caja"><label>DESTINATARIO</label><input type="text" id="d_n" placeholder="Nombre"><div style="display:flex; gap:3px"><input type="text" id="d_t" placeholder="Tel"><input type="text" id="d_cbu" placeholder="CBU/Alias"></div><div style="display:flex; gap:3px"><input type="text" id="d_d" placeholder="Dir"><input type="text" id="d_l" placeholder="Loc"></div></div>
-    </div>
-
-    <div class="caja">
-        <table class="tabla-items">
-            <thead><tr><th width="8%">CANT</th><th width="15%">TIPO</th><th>DETALLE</th><th width="12%">UNIT $</th><th width="12%">DECL $</th><th></th></tr></thead>
-            <tbody id="cuerpoItems"></tbody>
+    <div id="historial" class="panel">
+        <h3>MIS ENVÍOS RECIENTES</h3>
+        <table id="tabla-guias">
+            <thead>
+                <tr>
+                    <th>Nro Guía</th>
+                    <th>Fecha</th>
+                    <th>Destino</th>
+                    <th>Remitente</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody id="body-guias"></tbody>
         </table>
-        <button onclick="agregarFila()" style="margin-top:5px;">+ Fila</button>
-        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top:10px;">
-            <div><label>Seguro %</label><input type="number" id="p_seg" value="0.8" step="0.1" oninput="calcularTotales()"></div>
-            <div><label>C.R. %</label><input type="number" id="p_cr" value="5.0" step="0.5" oninput="calcularTotales()"></div>
-            <div><label>CR Activo?</label><select id="cr_act" onchange="calcularTotales()"><option value="N">NO</option><option value="S">SÍ</option></select></div>
-            <div><label>Pago en</label><select id="pago_en"><option>ORIGEN</option><option>DESTINO</option></select></div>
-            <div><label>Condición</label><select id="condicion"><option>CONTADO</option><option>CTA CTE</option></select></div>
-        </div>
-        <div style="text-align:right; margin-top:10px;">
-            <button id="btn_admin" onclick="abrirAdmin()" style="padding:8px 20px; background:var(--oscuro); color:white; border:none; cursor:pointer; border-radius:4px;">📊 PANEL ADMIN</button>
-        </div>
     </div>
 
-    <div class="caja" style="background:#edf2f7;">
-        <div style="display:flex; gap:5px; margin-bottom:8px; flex-wrap: wrap; align-items:center;">
-            <input type="text" id="busq" placeholder="🔍 Buscar..." oninput="renderHistorial()" style="width:120px; margin:0;">
-            <button onclick="cambiarFiltro('todos', this)" class="btn-filtro active">Todos</button>
-            <button onclick="cambiarFiltro('recibido', this)" class="btn-filtro">Recibido</button>
-            <button onclick="cambiarFiltro('deposito', this)" class="btn-filtro">Depósito</button>
-            <button onclick="cambiarFiltro('error', this)" class="btn-filtro">Error</button>
-            <span id="contador" style="font-size:11px; font-weight:bold; color:var(--azul); margin-left:auto;"></span>
-        </div>
-        <table class="tabla-items">
-            <thead><tr style="background:var(--oscuro); color:white;"><th>Guía</th><th>Trayecto</th><th>Total</th><th>Estado</th><th>🖨️</th></tr></thead>
-            <tbody id="listaHistorial"></tbody>
+    <div id="admin" class="panel">
+        <h3>REPORTE GLOBAL DE CARGA</h3>
+        <button onclick="descargarCSV()" style="margin-bottom:20px; padding:10px; cursor:pointer">Exportar Excel (CSV)</button>
+        <table id="tabla-admin">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Sucursal</th>
+                    <th>Destino</th>
+                    <th>Valor</th>
+                    <th>Pago</th>
+                </tr>
+            </thead>
+            <tbody id="body-admin"></tbody>
         </table>
     </div>
 </div>
 
-<div class="barra-fija no-print">
-    <div id="total_txt" style="font-size:24px; color:#48bb78; font-weight:bold;">TOTAL: $ 0.00</div>
-    <button class="btn-imprimir" onclick="confirmarYEmitir()">EMITIR E IMPRIMIR</button>
-</div>
-
-<div id="modalAdmin" class="no-print" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:white; padding:20px; border-radius:10px; box-shadow:0 0 50px rgba(0,0,0,0.5); z-index:1100; width:450px;">
-    <h3 style="text-align:center; margin-top:0;">CONTROL POR CIUDAD</h3>
-    <div id="resumen_loc"></div>
-    <hr>
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:10px;">
-        <button onclick="generarReporte('hoy')" style="padding:8px;">REPORTE HOY</button>
-        <button onclick="generarReporte('mes')" style="padding:8px;">REPORTE MES</button>
-        <button onclick="archivarNube()" style="grid-column: span 2; background:var(--rojo); color:white; border:none; padding:10px; cursor:pointer; margin-top:5px;">📦 VACIAR HISTORIAL NUBE</button>
+<div id="printArea" style="display:none">
+    <div class="print-header">
+        <div class="logo-box">
+            <h1>MOULIN</h1>
+            <p>Transporte & Logística</p>
+        </div>
+        <div class="guia-nro">
+            <p>GUÍA DE TRANSPORTE</p>
+            <h2 id="p-nro">---</h2>
+            <p id="p-fecha"></p>
+        </div>
     </div>
-    <button onclick="document.getElementById('modalAdmin').style.display='none'" style="margin-top:10px; width:100%;">CERRAR</button>
-</div>
 
-<div id="seccion-impresion"></div>
+    <div class="print-section">
+        <div>
+            <h3>Origen / Remitente</h3>
+            <div class="data-row"><span class="data-label">Nombre:</span> <span id="p-remitente"></span></div>
+            <div class="data-row"><span class="data-label">Ciudad:</span> <span id="p-origen"></span></div>
+        </div>
+        <div>
+            <h3>Destino / Destinatario</h3>
+            <div class="data-row"><span class="data-label">Nombre:</span> <span id="p-destinatario"></span></div>
+            <div class="data-row"><span class="data-label">Ciudad:</span> <span id="p-destino"></span></div>
+        </div>
+    </div>
+
+    <table class="table-items">
+        <thead>
+            <tr>
+                <th>DESCRIPCIÓN DE LA CARGA / BULTOS</th>
+                <th>TIPO</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td id="p-desc" style="height: 100px; vertical-align: top;"></td>
+                <td id="p-tipo" style="text-align: center;"></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="print-section">
+        <div>
+            <div class="data-row"><span class="data-label">VALOR DECL.:</span> $<span id="p-valor"></span></div>
+            <div class="data-row"><span class="data-label">COND. PAGO:</span> <span id="p-pago"></span></div>
+        </div>
+        <div style="border: 1px solid #000; padding: 10px; text-align: center;">
+            <strong>SELLO Y FIRMA</strong>
+            <div style="height: 60px;"></div>
+        </div>
+    </div>
+
+    <div class="print-footer">
+        <div class="signature-box">Firma Remitente</div>
+        <div class="signature-box">Firma Transporte</div>
+        <div class="signature-box">Firma Destinatario</div>
+    </div>
+    
+    <p style="font-size: 0.7rem; margin-top: 30px; text-align: center;">Documento generado por Sistema Moulin Cloud - Copia para Control</p>
+</div>
 
 <script>
-    function agregarFila() {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo"><option>Bulto</option><option>Pallet</option><option>Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="0" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
-        document.getElementById('cuerpoItems').appendChild(tr);
+    // SESIÓN Y SEGURIDAD
+    const userSession = JSON.parse(sessionStorage.getItem('moulin_sesion'));
+    if (!userSession) { window.location.href = "index.html"; }
+    
+    document.getElementById('display-user').innerText = `${userSession.nombre} (${userSession.prefijo})`;
+    document.getElementById('fecha').valueAsDate = new Date();
+
+    if (userSession.rol === 'admin') {
+        document.getElementById('admin-tab').style.display = 'block';
     }
 
-    function calcularTotales() {
-        let f = 0, d = 0;
-        document.querySelectorAll('#cuerpoItems tr').forEach(r => {
-            f += (parseFloat(r.querySelector('.i-cant').value)||0)*(parseFloat(r.querySelector('.i-unit').value)||0);
-            d += (parseFloat(r.querySelector('.i-decl').value)||0);
-        });
-        let s = d * (parseFloat(document.getElementById('p_seg').value)/100 || 0);
-        let cr = document.getElementById('cr_act').value === 'S' ? d * (parseFloat(document.getElementById('p_cr').value)/100) : 0;
-        let t = f + s + cr;
-        document.getElementById('total_txt').innerText = `TOTAL: $ ${t.toLocaleString('es-AR')}`;
-        return {flete: f, seg: s, cr: cr, total: t};
+    function logout() {
+        sessionStorage.clear();
+        window.location.href = "index.html";
     }
 
-    function renderHistorial() {
-        const b = document.getElementById('busq').value.toLowerCase();
-        const data = window.historialGlobal || [];
-        const filtrados = data.filter(g => {
-            const mB = g.num.toLowerCase().includes(b) || (g.r_n && g.r_n.toLowerCase().includes(b));
-            const mE = window.filtroEstado === 'todos' || g.estado === window.filtroEstado;
-            return mB && mE;
-        });
-        document.getElementById('contador').innerText = `${filtrados.length} guías`;
-        document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `<tr>
-            <td><b>${g.num}</b><br><small>${g.fecha}</small></td>
-            <td>${g.r_n} > ${g.d_n}</td>
-            <td>$${g.total}</td>
-            <td>
-                <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:10px;">
-                    <option value="recibido" ${g.estado==='recibido'?'selected':''}>RECIBIDO</option>
-                    <option value="deposito" ${g.estado==='deposito'?'selected':''}>DEPÓSITO</option>
-                    <option value="entregado" ${g.estado==='entregado'?'selected':''}>ENTREGADO</option>
-                    <option value="error" ${g.estado==='error'?'selected':''}>ERROR</option>
-                </select>
-            </td>
-            <td><button onclick="reimprimir('${g.num}')">🖨️</button></td>
-        </tr>`).join('');
+    function showPanel(id) {
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        event.currentTarget.classList.add('active');
     }
 
-    function abrirAdmin() {
-        const res = { "RECO": 0, "AVEL": 0, "SFE": 0, "ROS": 0 };
-        window.historialGlobal.forEach(g => { const p = g.num.split('-')[0]; if(res.hasOwnProperty(p)) res[p] += parseFloat(g.total); });
-        let html = "";
-        for (let loc in res) {
-            html += `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee; font-size:12px; align-items:center;">
-                <b>${loc}: $${res[loc].toLocaleString()}</b>
-                <div>
-                    <button onclick="descargarCSV(window.historialGlobal.filter(g=>g.num.startsWith('${loc}')), 'REPORTE_${loc}')" title="Descargar CSV">📥</button>
-                    <button onclick="finalizarTodoCiudad('${loc}')" style="background:var(--verde); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:9px; cursor:pointer;" title="Marcar todo como Entregado">✔ OK TODO</button>
-                </div>
-            </div>`;
+    // PUNTO 1: CONFIRMACIÓN ANTES DE EMITIR
+    function confirmarEmision() {
+        if (!document.getElementById('remitente').value || !document.getElementById('destinatario').value) {
+            alert("Por favor completa los datos básicos (Remitente y Destinatario)");
+            return;
         }
-        document.getElementById('resumen_loc').innerHTML = html;
-        document.getElementById('modalAdmin').style.display = 'block';
+
+        const confirmar = confirm("¿Estás seguro de emitir esta guía? Una vez aceptado, se grabará en el sistema e imprimirá.");
+        if (confirmar) {
+            emitirGuia();
+        }
     }
 
-    window.generarReporte = (t) => {
-        const hoy = new Date().toLocaleDateString();
-        const mes = (new Date().getMonth() + 1).toString().padStart(2, '0');
-        descargarCSV(window.historialGlobal.filter(g => t==='hoy' ? g.fecha===hoy : g.fecha.split('/')[1]===mes), `MOULIN_${t.toUpperCase()}`);
-    };
+    function emitirGuia() {
+        const id = userSession.prefijo + "-" + Math.floor(1000 + Math.random() * 9000);
+        
+        const guia = {
+            id: id,
+            sucursal: userSession.nombre,
+            prefijo: userSession.prefijo,
+            fecha: document.getElementById('fecha').value,
+            remitente: document.getElementById('remitente').value,
+            origen: document.getElementById('origen').value,
+            destinatario: document.getElementById('destinatario').value,
+            destino: document.getElementById('destino').value,
+            descripcion: document.getElementById('descripcion').value,
+            valor: document.getElementById('valor').value,
+            pago: document.getElementById('pago').value,
+            tipo: document.getElementById('tipo-servicio').value
+        };
 
-    function descargarCSV(datos, nombre) {
-        let csv = "\uFEFFFECHA;GUIA;REM;DEST;TOTAL;ESTADO\n";
-        datos.forEach(g => csv += `${g.fecha};${g.num};${g.r_n};${g.d_n};${g.total};${g.estado}\n`);
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
-        link.download = `${nombre}.csv`; link.click();
-    }
+        // Guardar localmente (simulando base de datos en nube)
+        let db = JSON.parse(localStorage.getItem('moulin_db')) || [];
+        db.push(guia);
+        localStorage.setItem('moulin_db', JSON.stringify(db));
 
-    function imprimir(g) {
-        let itemsHTML = g.items.map(i => `<tr><td>${i.c}</td><td>${i.t}</td><td>${i.d}</td></tr>`).join('');
-        let html = "";
-        ['ORIGINAL', 'DUPLICADO'].forEach(tipo => {
-            html += `<div class="cupon">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <img src="logo.png" style="height:35px" onerror="this.src='https://via.placeholder.com/100x35?text=MOULIN'">
-                    <div style="text-align:right"><b style="font-size:10px;">${tipo}</b><br><b style="font-size:18px; color:red;">GUÍA: ${g.num}</b></div>
-                </div>
-                <h3 style="margin:2px 0; text-align:center; border-top:1px solid #000; font-size:14px;">TRANSPORTE MOULIN</h3>
-                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; padding:4px; font-size:10px; margin-top:2px;">
-                    <div><b>REMITENTE:</b> ${g.r_n}<br>Loc: ${g.r_l}</div><div><b>DESTINATARIO:</b> ${g.d_n}<br>Loc: ${g.d_l}</div>
-                </div>
-                <table border="1" style="width:100%; border-collapse:collapse; margin-top:3px; font-size:10px;">
-                    <thead><tr style="background:#eee;"><th width="10%">Cant</th><th width="20%">Tipo</th><th>Detalle</th></tr></thead><tbody>${itemsHTML}</tbody>
-                </table>
-                <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:10px;">
-                    <div>Pago: ${g.pago_en}<br>Condición: ${g.condicion}</div>
-                    <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | CR: $${g.cr}<br><b style="font-size:13px;">TOTAL A COBRAR: $${g.total}</b></div>
-                </div>
-                <div style="margin-top:10px; border-top:1px dashed #999; font-size:8px; text-align:center; padding-top:5px;">Firma y Aclaración: _________________________________</div>
-            </div>`;
-        });
-        document.getElementById('seccion-impresion').innerHTML = html;
+        // Cargar datos en zona de impresión
+        document.getElementById('p-nro').innerText = guia.id;
+        document.getElementById('p-fecha').innerText = guia.fecha;
+        document.getElementById('p-remitente').innerText = guia.remitente;
+        document.getElementById('p-origen').innerText = guia.origen;
+        document.getElementById('p-destinatario').innerText = guia.destinatario;
+        document.getElementById('p-destino').innerText = guia.destino;
+        document.getElementById('p-desc').innerText = guia.descripcion;
+        document.getElementById('p-valor').innerText = guia.valor;
+        document.getElementById('p-pago').innerText = guia.pago;
+        document.getElementById('p-tipo').innerText = guia.tipo;
+
+        // Imprimir
+        document.getElementById('printArea').style.display = 'block';
         window.print();
+        document.getElementById('printArea').style.display = 'none';
+        
+        alert("Guía " + id + " guardada y enviada a impresión.");
+        location.reload(); 
     }
 
-    window.reimprimir = (n) => imprimir(window.historialGlobal.find(x => x.num === n));
-    window.onload = () => { agregarFila(); if(ROL!=='admin')document.getElementById('btn_admin').style.display='none'; };
+    // PUNTO 2: HISTORIAL FILTRADO POR USUARIO
+    function updateTable() {
+        const db = JSON.parse(localStorage.getItem('moulin_db')) || [];
+        const body = document.getElementById('body-guias');
+        body.innerHTML = '';
+
+        // Filtrado inteligente
+        const misGuias = db.filter(g => {
+            if (userSession.rol === 'admin') return true; // El admin ve todo
+            return g.prefijo === userSession.prefijo; // Sucursal solo ve lo suyo
+        });
+
+        misGuias.reverse().forEach(g => {
+            body.innerHTML += `
+                <tr>
+                    <td><strong>${g.id}</strong></td>
+                    <td>${g.fecha}</td>
+                    <td>${g.destino}</td>
+                    <td>${g.remitente}</td>
+                    <td><span class="status-pill">En Tránsito</span></td>
+                </tr>
+            `;
+        });
+
+        // Cargar tabla Admin
+        if(userSession.rol === 'admin') {
+            const bodyAdmin = document.getElementById('body-admin');
+            bodyAdmin.innerHTML = '';
+            db.forEach(g => {
+                bodyAdmin.innerHTML += `<tr><td>${g.id}</td><td>${g.sucursal}</td><td>${g.destino}</td><td>$${g.valor}</td><td>${g.pago}</td></tr>`;
+            });
+        }
+    }
+
+    function descargarCSV() {
+        const db = JSON.parse(localStorage.getItem('moulin_db')) || [];
+        let csv = "ID,Fecha,Sucursal,Remitente,Origen,Destinatario,Destino,Valor,Pago\n";
+        db.forEach(g => {
+            csv += `${g.id},${g.fecha},${g.sucursal},${g.remitente},${g.origen},${g.destinatario},${g.destino},${g.valor},${g.pago}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.setAttribute('hidden', '');
+        a.setAttribute('href', url);
+        a.setAttribute('download', 'reporte_moulin.csv');
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    // Carga inicial
+    updateTable();
 </script>
 </body>
 </html>
