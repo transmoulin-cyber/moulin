@@ -95,13 +95,12 @@
             .no-print { display: none !important; } 
             #seccion-impresion { 
                 display: block !important; 
-                transform: scale(0.95); 
                 transform-origin: top center; 
             }
             .cupon { 
                 border: 2px solid #000; 
                 padding: 5px; 
-                height: 11.8cm; 
+                height: 7.0cm; /* Modificado a 7cm como pediste */
                 margin-bottom: 0.2cm; 
                 box-sizing: border-box; 
                 width: 100%; 
@@ -192,9 +191,19 @@
 <div id="seccion-impresion"></div>
 
 <script>
+    function actualizarValorPorTipo(select) {
+        const fila = select.closest('tr');
+        const unitInput = fila.querySelector('.i-unit');
+        const tipo = select.value;
+        if (tipo === "Bulto") unitInput.value = 18000;
+        else if (tipo === "Pallet") unitInput.value = 180000;
+        else if (tipo === "Sobre") unitInput.value = 15000;
+        calcularTotales();
+    }
+
     function agregarFila() {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo"><option>Bulto</option><option>Pallet</option><option>Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="0" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
+        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo" onchange="actualizarValorPorTipo(this)"><option value="Bulto">Bulto</option><option value="Pallet">Pallet</option><option value="Sobre">Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
         document.getElementById('cuerpoItems').appendChild(tr);
     }
 
