@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>SISTEMA MOULIN CLOUD V70 - FINAL PRINT</title>
+    <title>SISTEMA MOULIN CLOUD V70 - CONTROL TOTAL</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getDatabase, ref, set, push, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
@@ -99,9 +99,9 @@
             }
             .cupon { 
                 border: 2px solid #000; 
-                padding: 5px; 
-                height: 7.0cm; /* Modificado a 7cm como pediste */
-                margin-bottom: 0.2cm; 
+                padding: 4px; 
+                height: 7.0cm; 
+                margin-bottom: 0.1cm; 
                 box-sizing: border-box; 
                 width: 100%; 
                 page-break-inside: avoid;
@@ -116,7 +116,7 @@
                 font-weight: bold;
                 font-size: 14px !important;
             }
-            .mini-print { font-size: 12px !important; line-height: 1.2; }
+            .mini-print { font-size: 11px !important; line-height: 1.1; }
         }
         #seccion-impresion { display: none; }
     </style>
@@ -225,23 +225,22 @@
         let html = "";
         ['ORIGINAL', 'DUPLICADO'].forEach(tipo => {
             html += `<div class="cupon">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <img src="logo.png" style="height:35px" onerror="this.src='https://via.placeholder.com/100x35?text=MOULIN'">
-                    <div style="text-align:right"><b style="font-size:10px;">${tipo}</b><br><b style="font-size:18px; color:red;">GUÍA: ${g.num}</b></div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                    <img src="logo.png" style="height:30px" onerror="this.src='https://via.placeholder.com/100x30?text=MOULIN'">
+                    <div style="text-align:right"><b style="font-size:9px;">${tipo}</b><br><b style="font-size:16px; color:red;">GUÍA: ${g.num}</b></div>
                 </div>
-                <h3 style="margin:2px 0; text-align:center; border-top:1px solid #000; font-size:13px;">TRANSPORTE MOULIN</h3>
-                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; padding:4px; margin-top:2px;">
-                    <div class="mini-print"><b>REMITENTE:</b> ${g.r_n}<br>Dir: ${g.r_d} | Tel: ${g.r_t}<br>Loc: <span class="resaltado-cobro">${g.r_l}</span></div>
-                    <div class="mini-print"><b>DESTINATARIO:</b> ${g.d_n}<br>Dir: ${g.d_d} | Tel: ${g.d_t}<br>Loc: <span class="resaltado-cobro">${g.d_l}</span></div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; padding:2px; margin-top:2px;">
+                    <div class="mini-print"><b>REM:</b> ${g.r_n}<br>Dir: ${g.r_d} | Tel: ${g.r_t}<br>Loc: <span class="resaltado-cobro">${g.r_l}</span></div>
+                    <div class="mini-print"><b>DEST:</b> ${g.d_n}<br>Dir: ${g.d_d} | Tel: ${g.d_t}<br>Loc: <span class="resaltado-cobro">${g.d_l}</span></div>
                 </div>
-                <table border="1" style="width:100%; border-collapse:collapse; margin-top:3px; font-size:11px;">
+                <table border="1" style="width:100%; border-collapse:collapse; margin-top:2px; font-size:10px;">
                     <thead><tr style="background:#eee;"><th width="10%">Cant</th><th width="20%">Tipo</th><th>Detalle</th></tr></thead><tbody>${itemsHTML}</tbody>
                 </table>
-                <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:11px; align-items: flex-end;">
-                    <div class="mini-print">Pago: <span class="resaltado-cobro">${g.pago_en}</span><br>Condición: <span class="resaltado-cobro">${g.condicion}</span><br><b>VALOR DECLARADO: $${g.v_decl || 0}</b></div>
-                    <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | CR: $${g.cr}<br><b style="font-size:16px;">TOTAL A COBRAR: $${g.total}</b></div>
+                <div style="display:flex; justify-content:space-between; margin-top:2px; font-size:10px; align-items: flex-end;">
+                    <div class="mini-print">Pago: <span class="resaltado-cobro">${g.pago_en}</span> | Cond: <span class="resaltado-cobro">${g.condicion}</span><br><b>DECL: $${g.v_decl || 0}</b></div>
+                    <div style="text-align:right;">F: $${g.flete} | S: $${g.seg} | CR: $${g.cr}<br><b style="font-size:14px;">TOTAL: $${g.total}</b></div>
                 </div>
-                <div style="margin-top:6px; border-top:1px dashed #999; font-size:9px; text-align:center; padding-top:4px;">Firma y Aclaración: _________________________________</div>
+                <div style="margin-top:2px; border-top:1px dashed #999; font-size:8px; text-align:center; padding-top:2px;">Firma y Aclaración: _________________________________</div>
             </div>`;
         });
         document.getElementById('seccion-impresion').innerHTML = html;
