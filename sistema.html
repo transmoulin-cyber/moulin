@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>MOULIN CLOUD V70 - SISTEMA COMPLETO</title>
+    <title>SISTEMA MOULIN V70 - FORMATO A4 DOBLE</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getDatabase, ref, set, push, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
@@ -95,27 +95,53 @@
                 return p && m && e;
             });
             document.getElementById('contador').innerText = `${filtrados.length} guías`;
-            document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `<tr><td><b>${g.num}</b><br><small>${g.fecha}</small></td><td>${g.r_n} > ${g.d_n}</td><td>$${g.total}</td><td><select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:10px;"><option value="recibido" ${g.estado==='recibido'?'selected':''}>RECIBIDO</option><option value="deposito" ${g.estado==='deposito'?'selected':''}>DEPÓSITO</option><option value="entregado" ${g.estado==='entregado'?'selected':''}>ENTREGADO</option></select></td><td><button onclick="reimprimir('${g.num}')">🖨️</button></td></tr>`).join('');
+            document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `
+                <tr>
+                    <td><b>${g.num}</b><br><small>${g.fecha}</small></td>
+                    <td>${g.r_n} > ${g.d_n}</td>
+                    <td>$${g.total}</td>
+                    <td>
+                        <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:10px; ${g.estado === 'entregado' ? 'color:green' : ''}">
+                            <option value="recibido" ${g.estado==='recibido'?'selected':''}>RECIBIDO</option>
+                            <option value="deposito" ${g.estado==='deposito'?'selected':''}>DEPÓSITO</option>
+                            <option value="entregado" ${g.estado==='entregado'?'selected':''}>ENTREGADO</option>
+                            <option value="error" ${g.estado==='error'?'selected':''}>ERROR</option>
+                        </select>
+                    </td>
+                    <td><button onclick="reimprimir('${g.num}')">🖨️</button></td>
+                </tr>
+            `).join('');
         };
     </script>
 
     <style>
         :root { --azul: #1a4a7a; --oscuro: #102a43; --verde: #38a169; --rojo: #d32f2f; }
-        body { font-family: Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 10px; padding-bottom: 80px; }
+        body { font-family: Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 10px; padding-bottom: 90px; }
         .hoja { background: white; max-width: 900px; margin: auto; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .caja { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; margin-bottom: 8px; border-radius: 5px; }
         input, select { width: 92%; padding: 5px; font-size: 12px; margin-bottom: 3px; border: 1px solid #ccc; border-radius: 3px; }
         .tabla-items { width: 100%; border-collapse: collapse; font-size: 12px; }
         .tabla-items th { background: var(--azul); color: white; padding: 5px; text-align: left; }
         .btn-imprimir { background: var(--verde); color: white; border: none; padding: 10px 30px; border-radius: 20px; font-size: 18px; font-weight: bold; cursor: pointer; }
-        
+        .btn-filtro { padding: 5px 10px; cursor: pointer; border: 1px solid #ccc; background: white; font-size: 11px; }
+        .active { background: var(--azul); color: white; }
+
         @media print {
-            @page { size: 21.5cm 14.7cm landscape; margin: 0; }
+            @page { size: A4 portrait; margin: 0; }
             .no-print { display: none !important; }
-            #seccion-impresion { display: flex !important; width: 21.5cm; height: 14.7cm; }
-            .zona-chofer { width: 16.5cm; height: 14.7cm; padding: 0.5cm; border-right: 1px dashed #000; box-sizing: border-box; }
-            .zona-cliente { width: 5cm; height: 14.7cm; padding: 0.4cm; box-sizing: border-box; text-align: center; }
-            .resaltado { background: #eee !important; -webkit-print-color-adjust: exact; padding: 2px; font-weight: bold; }
+            #seccion-impresion { display: block !important; padding: 0.5cm; }
+            .cupon { 
+                height: 13.8cm; 
+                border: 2px solid #000; 
+                margin-bottom: 0.5cm; 
+                padding: 10px; 
+                box-sizing: border-box; 
+                display: flex; 
+                flex-direction: column;
+            }
+            .tabla-print { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+            .tabla-print th, .tabla-print td { border: 1px solid black; padding: 5px; text-align: left; }
+            .resaltado { background: #eee !important; -webkit-print-color-adjust: exact; font-weight: bold; padding: 3px; border: 1px solid #666; }
         }
         #seccion-impresion { display: none; }
     </style>
@@ -126,7 +152,7 @@
 
 <div class="hoja no-print">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid var(--azul); margin-bottom:10px;">
-        <h2 style="margin:0;">MOULIN V70</h2>
+        <h2 style="margin:0;">MOULIN CLOUD V70</h2>
         <b id="display_guia" style="font-size:24px; color:var(--rojo)">...</b>
     </div>
 
@@ -141,27 +167,32 @@
             <tbody id="cuerpoItems"></tbody>
         </table>
         <button onclick="agregarFila()" style="margin:5px 0;">+ Item</button>
-        <div style="display:grid; grid-template-columns: repeat(5,1fr); gap:5px; margin-top:5px;">
-            <input type="number" id="p_seg" value="0.8"> <input type="number" id="p_cr" value="5.0">
-            <select id="cr_act" onchange="calcularTotales()"><option value="N">CR NO</option><option value="S">CR SI</option></select>
+        <div style="display:grid; grid-template-columns: repeat(4,1fr); gap:5px; margin-top:5px;">
             <select id="pago_en"><option>ORIGEN</option><option>DESTINO</option></select>
             <select id="condicion"><option>CONTADO</option><option>CTA CTE</option></select>
+            <input type="number" id="p_seg" value="0.8" style="display:none">
+            <input type="number" id="p_cr" value="5.0" style="display:none">
         </div>
     </div>
 
-    <div class="caja" style="max-height: 250px; overflow-y: auto;">
-        <div style="display:flex; gap:5px; margin-bottom:5px;">
-            <input type="text" id="busq" placeholder="🔍 Buscar guía o nombre..." oninput="renderHistorial()">
-            <span id="contador" style="font-size:12px; font-weight:bold;"></span>
+    <div class="caja" style="max-height: 300px; overflow-y: auto;">
+        <div style="display:flex; gap:5px; margin-bottom:10px; align-items:center;">
+            <input type="text" id="busq" placeholder="🔍 Buscar..." oninput="renderHistorial()" style="width:150px; margin:0;">
+            <button onclick="window.filtroEstado='todos'; renderHistorial()" class="btn-filtro">Todos</button>
+            <button onclick="window.filtroEstado='recibido'; renderHistorial()" class="btn-filtro">Recibido</button>
+            <button onclick="window.filtroEstado='deposito'; renderHistorial()" class="btn-filtro">Depósito</button>
+            <button onclick="window.filtroEstado='entregado'; renderHistorial()" class="btn-filtro">Entregado</button>
+            <span id="contador" style="font-size:12px; font-weight:bold; margin-left:auto;"></span>
         </div>
         <table class="tabla-items">
+            <thead><tr style="background:var(--oscuro); color:white;"><th>Guía</th><th>Recorrido</th><th>Total</th><th>Estado</th><th>🖨️</th></tr></thead>
             <tbody id="listaHistorial"></tbody>
         </table>
     </div>
 </div>
 
-<div style="position:fixed; bottom:0; left:0; width:100%; background:var(--oscuro); color:white; padding:10px; display:flex; justify-content:space-around; align-items:center; z-index:100;" class="no-print">
-    <div id="total_txt" style="font-size:20px; font-weight:bold; color:#48bb78;">TOTAL: $ 0.00</div>
+<div style="position:fixed; bottom:0; left:0; width:100%; background:var(--oscuro); color:white; padding:15px; display:flex; justify-content:space-around; align-items:center; z-index:100;" class="no-print">
+    <div id="total_txt" style="font-size:24px; font-weight:bold; color:#48bb78;">TOTAL: $ 0.00</div>
     <button class="btn-imprimir" onclick="confirmarYEmitir()">EMITIR E IMPRIMIR</button>
 </div>
 
@@ -178,7 +209,7 @@
     }
     function agregarFila() {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo" onchange="actualizarValorPorTipo(this)"><option value="Bulto">Bulto</option><option value="Pallet">Pallet</option><option value="Sobre">Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" style="display:none"><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
+        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo" onchange="actualizarValorPorTipo(this)"><option value="Bulto">Bulto</option><option value="Pallet">Pallet</option><option value="Sobre">Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
         document.getElementById('cuerpoItems').appendChild(tr);
         calcularTotales();
     }
@@ -188,32 +219,43 @@
         return {flete: f, seg: 0, cr: 0, total: f, v_decl: 0};
     }
     function imprimir(g) {
-        let itms = g.items.map(i => `<tr><td>${i.c}</td><td>${i.t}</td><td>${i.d}</td><td>$${i.u}</td></tr>`).join('');
-        document.getElementById('seccion-impresion').innerHTML = `
-            <div class="zona-chofer">
-                <div style="display:flex; justify-content:space-between;">
-                    <img src="logo.png" style="height:40px" onerror="this.src='https://via.placeholder.com/100x40?text=MOULIN'">
-                    <div style="text-align:right"><b>HOJA DE RUTA</b><br><b style="font-size:22px; color:red;">${g.num}</b></div>
+        let itemsHTML = g.items.map(i => `<tr><td>${i.c}</td><td>${i.t}</td><td>${i.d}</td><td>$${i.u}</td></tr>`).join('');
+        let html = "";
+        ['ORIGINAL (Para el Chofer)', 'DUPLICADO (Para el Cliente)'].forEach(titulo => {
+            html += `
+            <div class="cupon">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <img src="logo.png" style="height:50px" onerror="this.src='https://via.placeholder.com/150x50?text=MOULIN'">
+                    <div style="text-align:right">
+                        <b style="font-size:14px;">${titulo}</b><br>
+                        <b style="font-size:26px; color:red;">GUÍA: ${g.num}</b><br>
+                        <span>Fecha: ${g.fecha}</span>
+                    </div>
                 </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; padding:5px; margin:10px 0; font-size:11px;">
-                    <div><b>REMITENTE:</b><br>${g.r_n}<br>${g.r_d} (${g.r_l})</div>
-                    <div><b>DESTINATARIO:</b><br>${g.d_n}<br>${g.d_d} (${g.d_l})</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:15px 0; padding:10px; font-size:13px; line-height:1.4;">
+                    <div><b>REMITENTE:</b><br>${g.r_n}<br>Dirección: ${g.r_d}<br>Tel: ${g.r_t}<br>Loc: <span class="resaltado">${g.r_l}</span></div>
+                    <div><b>DESTINATARIO:</b><br>${g.d_n}<br>Dirección: ${g.d_d}<br>Tel: ${g.d_t}<br>Loc: <span class="resaltado">${g.d_l}</span></div>
                 </div>
-                <table border="1" style="font-size:11px;"><thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th></tr></thead><tbody>${itms}</tbody></table>
-                <div style="margin-top:10px; text-align:right; font-size:14px;"><b>TOTAL GUÍA: $${g.total}</b><br><small>Pago: ${g.pago_en}</small></div>
-            </div>
-            <div class="zona-cliente">
-                <div style="border-bottom:2px solid #000; padding-bottom:5px; margin-bottom:10px;">
-                    <b style="font-size:14px;">CLIENTE</b><br><b style="font-size:20px; color:red;">${g.num}</b>
+                <table class="tabla-print">
+                    <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unitario</th></tr></thead>
+                    <tbody>${itemsHTML}</tbody>
+                </table>
+                <div style="display:flex; justify-content:space-between; margin-top:auto; padding:10px; border:1px solid #000; align-items:center;">
+                    <div style="font-size:13px;">
+                        <b>PAGO EN:</b> <span class="resaltado">${g.pago_en}</span><br>
+                        <b>CONDICIÓN:</b> <span class="resaltado">${g.condicion}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <b style="font-size:22px;">TOTAL: $${g.total}</b>
+                    </div>
                 </div>
-                <div style="text-align:left; font-size:11px;">
-                    <b>FECHA:</b> ${g.fecha}<br><br>
-                    <b>DESTINO:</b><br><span class="resaltado">${g.d_l}</span><br><br>
-                    <b>TOTAL:</b><br><span style="font-size:16px; font-weight:bold;">$${g.total}</span><br><br>
-                    <b>BULTOS:</b> ${g.items.reduce((a,b)=>a+parseInt(b.c),0)}<br><br>
-                    <b>PAGO:</b> ${g.pago_en}
+                <div style="margin-top:20px; display:flex; justify-content:space-between;">
+                    <div style="border-top:1px solid #000; width:45%; text-align:center; padding-top:5px; margin-top:30px; font-size:11px;">Firma y Aclaración Remitente</div>
+                    <div style="border-top:1px solid #000; width:45%; text-align:center; padding-top:5px; margin-top:30px; font-size:11px;">Firma y Aclaración Destinatario</div>
                 </div>
             </div>`;
+        });
+        document.getElementById('seccion-impresion').innerHTML = html;
         window.print();
     }
     window.reimprimir = (n) => imprimir(window.historialGlobal.find(x => x.num === n));
