@@ -48,24 +48,24 @@
         th { background: #f8fafc; color: var(--primary); }
         .status-pill { padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; background: #e3f9e5; color: #1f7a33; }
 
-        /* ESTILOS DE IMPRESIÓN MEJORADOS (PUNTO 3) */
+        /* ESTILOS DE IMPRESIÓN (PUNTO 3) */
         @media print {
             body * { visibility: hidden; }
             #printArea, #printArea * { visibility: visible; }
             #printArea { 
                 position: absolute; 
                 left: 0; top: 0; width: 100%; 
-                margin: 0; padding: 20px;
+                margin: 0; padding: 10px;
                 background: white !important;
+                transform: scale(0.90); /* Ajuste forzado para una sola hoja */
+                transform-origin: top center;
             }
             @page { 
                 size: A4; 
-                margin: 10mm; /* Márgenes de seguridad */
+                margin: 5mm; 
             }
             .no-print { display: none !important; }
-            
-            /* Ajuste para que entre en una hoja */
-            #printArea { transform: scale(0.95); transform-origin: top center; }
+            .print-section h3 { font-size: 1.5rem !important; background: #ddd !important; padding: 10px !important; } /* Etiquetas más grandes */
         }
 
         /* Diseño de la Guía Impresa */
@@ -79,7 +79,7 @@
         .print-section h3 { 
             border-bottom: 1px solid #000; 
             margin-bottom: 10px; 
-            font-size: 1.2rem; /* Letra de origen/destino más grande */
+            font-size: 1.2rem;
             text-transform: uppercase;
             background: #eee;
             padding: 5px;
@@ -283,17 +283,17 @@
         document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        event.currentTarget.classList.add('active');
+        if(event) event.currentTarget.classList.add('active');
     }
 
-    // PUNTO 1: CONFIRMACIÓN ANTES DE EMITIR
+    // PUNTO 1: CONFIRMACIÓN ANTES DE EMITIR (MEJORADO)
     function confirmarEmision() {
         if (!document.getElementById('remitente').value || !document.getElementById('destinatario').value) {
             alert("Por favor completa los datos básicos (Remitente y Destinatario)");
             return;
         }
 
-        const confirmar = confirm("¿Estás seguro de emitir esta guía? Una vez aceptado, se grabará en el sistema e imprimirá.");
+        const confirmar = confirm("¿Desea grabar esta guía en el sistema e imprimirla ahora?");
         if (confirmar) {
             emitirGuia();
         }
@@ -317,12 +317,10 @@
             tipo: document.getElementById('tipo-servicio').value
         };
 
-        // Guardar localmente (simulando base de datos en nube)
         let db = JSON.parse(localStorage.getItem('moulin_db')) || [];
         db.push(guia);
         localStorage.setItem('moulin_db', JSON.stringify(db));
 
-        // Cargar datos en zona de impresión
         document.getElementById('p-nro').innerText = guia.id;
         document.getElementById('p-fecha').innerText = guia.fecha;
         document.getElementById('p-remitente').innerText = guia.remitente;
@@ -334,25 +332,24 @@
         document.getElementById('p-pago').innerText = guia.pago;
         document.getElementById('p-tipo').innerText = guia.tipo;
 
-        // Imprimir
         document.getElementById('printArea').style.display = 'block';
         window.print();
         document.getElementById('printArea').style.display = 'none';
         
-        alert("Guía " + id + " guardada y enviada a impresión.");
+        alert("Guía " + id + " grabada correctamente.");
         location.reload(); 
     }
 
-    // PUNTO 2: HISTORIAL FILTRADO POR USUARIO
+    // PUNTO 2: PRIVACIDAD POR SUCURSAL
     function updateTable() {
         const db = JSON.parse(localStorage.getItem('moulin_db')) || [];
         const body = document.getElementById('body-guias');
         body.innerHTML = '';
 
-        // Filtrado inteligente
+        // Filtrado: Admin ve todo, Sucursal solo su prefijo
         const misGuias = db.filter(g => {
-            if (userSession.rol === 'admin') return true; // El admin ve todo
-            return g.prefijo === userSession.prefijo; // Sucursal solo ve lo suyo
+            if (userSession.rol === 'admin') return true;
+            return g.prefijo === userSession.prefijo; 
         });
 
         misGuias.reverse().forEach(g => {
@@ -367,7 +364,6 @@
             `;
         });
 
-        // Cargar tabla Admin
         if(userSession.rol === 'admin') {
             const bodyAdmin = document.getElementById('body-admin');
             bodyAdmin.innerHTML = '';
@@ -394,7 +390,6 @@
         document.body.removeChild(a);
     }
 
-    // Carga inicial
     updateTable();
 </script>
 </body>
