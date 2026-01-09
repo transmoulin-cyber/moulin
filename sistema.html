@@ -62,11 +62,9 @@
 </div>
 
 <script>
-    // Base de datos de usuarios (puedes agregar más aquí)
     const usuarios = [
         { u: "admin", p: "moulin2024", nombre: "Administración", prefijo: "ADM" },
-        { u: "chofer1", p: "moulin123", nombre: "Chofer 01", prefijo: "CH1" },
-        { u: "chofer2", p: "moulin456", nombre: "Chofer 02", prefijo: "CH2" }
+        { u: "chofer1", p: "moulin123", nombre: "Chofer 01", prefijo: "CH1" }
     ];
 
     function intentarIngreso() {
@@ -77,26 +75,22 @@
         const encontrado = usuarios.find(x => x.u === uInput && x.p === pInput);
 
         if (encontrado) {
-            // Guardar sesión
             sessionStorage.setItem('moulin_sesion', JSON.stringify(encontrado));
 
-            // DETECCIÓN DE DISPOSITIVO (MAGIA)
             const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
             if (esMovil) {
-                // Si es celular o tablet, va a movil.html
+                // Abre el archivo movil.html
                 window.location.href = "movil.html";
             } else {
-                // Si es computadora, va al archivo de escritorio
-                // ASEGURATE DE QUE TU ARCHIVO DE PC SE LLAME escritorio.html
-                window.location.href = "escritorio.html";
+                // CORRECCIÓN: Ahora busca sistema.html en lugar de escritorio.html
+                window.location.href = "sistema.html";
             }
         } else {
             error.style.display = 'block';
         }
     }
 
-    // Permitir entrar con la tecla Enter
     document.addEventListener('keypress', (e) => {
         if(e.key === 'Enter') intentarIngreso();
     });
