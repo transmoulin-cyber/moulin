@@ -23,13 +23,11 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         
-        // Verificación de sesión rápida
         const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
         if (!sesion) { window.location.href = "index.html"; }
 
         window.historial = [];
 
-        // Escuchar cambios en las guías
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
             const data = snapshot.val();
             window.historial = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
@@ -38,35 +36,36 @@
 
         window.actualizarEstado = (id, nuevoEstado) => {
             update(ref(db, `moulin/guias/${id}`), { estado: nuevoEstado });
+            alert("Estado actualizado!");
         };
 
         window.renderizarLista = () => {
             const busq = document.getElementById('search').value.toLowerCase();
             const filtrados = window.historial.filter(g => 
                 g.num.toLowerCase().includes(busq) || 
-                g.d_n.toLowerCase().includes(busq) || 
-                g.d_l.toLowerCase().includes(busq)
+                (g.d_n && g.d_n.toLowerCase().includes(busq)) || 
+                (g.d_l && g.d_l.toLowerCase().includes(busq))
             );
 
             document.getElementById('lista').innerHTML = filtrados.map(g => `
                 <div class="card-movil">
-                    <div style="display:flex; justify-content:space-between;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
                         <b style="font-size:18px; color:#d32f2f;">${g.num}</b>
                         <span class="badge ${g.estado}">${g.estado.toUpperCase()}</span>
                     </div>
-                    <div style="margin:8px 0; font-size:14px;">
-                        <b>Destino:</b> ${g.d_n}<br>
+                    <div style="margin:10px 0; font-size:14px; line-height:1.4;">
+                        <b>Destinatario:</b> ${g.d_n}<br>
                         <b>Localidad:</b> ${g.d_l}<br>
                         <b>Dirección:</b> ${g.d_d}<br>
-                        ${g.cr_activo === 'S' ? `<b style="color:red; background:yellow;">REEMBOLSO: $${g.cr_monto}</b>` : ''}
+                        ${g.cr_activo === 'S' ? `<div style="margin-top:5px; padding:5px; background:yellow; color:red; font-weight:bold; border:2px solid red; text-align:center;">⚠️ COBRAR REEMBOLSO: $${g.cr_monto}</div>` : ''}
                     </div>
-                    <div style="display:flex; gap:5px;">
-                        <select onchange="actualizarEstado('${g.firebaseID}', this.value)" style="flex:1; padding:8px;">
+                    <div style="display:flex; gap:8px;">
+                        <select onchange="actualizarEstado('${g.firebaseID}', this.value)" style="flex:1; padding:10px; border-radius:5px; border:1px solid #1a4a7a;">
                             <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
-                            <option value="deposito" ${g.estado==='deposito'?'selected':''}>Depósito</option>
-                            <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado</option>
+                            <option value="deposito" ${g.estado==='deposito'?'selected':''}>En Depósito</option>
+                            <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado ✅</option>
                         </select>
-                        <button onclick="verQR('${g.num}')" style="background:#1a4a7a; color:white; border:none; padding:8px 15px; border-radius:5px;">QR</button>
+                        <button onclick="verQR('${g.num}')" style="background:#1a4a7a; color:white; border:none; padding:10px; border-radius:5px; width:50px;">QR</button>
                     </div>
                 </div>
             `).join('');
@@ -77,51 +76,101 @@
             document.getElementById('qrcode').innerHTML = "";
             new QRCode(document.getElementById("qrcode"), {
                 text: num,
-                width: 200,
-                height: 200
+                width: 220,
+                height: 220
             });
-            document.getElementById('qrTitle').innerText = num;
+            document.getElementById('qrTitle').innerText = "GUÍA: " + num;
         };
 
-        window.cerrarQR = () => {
-            document.getElementById('modalQR').style.display = 'none';
+        window.cerrarQR = () => { document.getElementById('modalQR').style.display = 'none'; };
+        
+        window.cerrarSesion = () => {
+            sessionStorage.clear();
+            window.location.href = "index.html";
         };
     </script>
 
     <style>
-        body { font-family: sans-serif; background: #eceff1; margin: 0; padding: 10px; }
-        .header { background: #102a43; color: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; }
-        #search { width: 95%; padding: 12px; border-radius: 25px; border: 1px solid #ccc; margin-bottom: 15px; font-size: 16px; }
-        .card-movil { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 5px solid #1a4a7a; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-        .recibido { background: #e3f2fd; color: #1976d2; }
-        .deposito { background: #fff3e0; color: #f57c00; }
-        .entregado { background: #e8f5e9; color: #388e3c; }
+        :root { --azul: #102a43; --rojo: #d32f2f; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 10px; padding-bottom: 50px; }
         
-        /* Estilos del Modal QR */
-        #modalQR { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:1000; }
-        .modal-content { background: white; padding: 20px; border-radius: 10px; text-align: center; }
-        #qrcode { margin: 20px 0; }
-        .btn-cerrar { background: #d32f2f; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
+        /* HEADER CON LOGO */
+        .header { 
+            background: var(--azul); 
+            color: white; 
+            padding: 15px; 
+            border-radius: 12px; 
+            margin-bottom: 15px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .header img { height: 50px; width: auto; border-radius: 4px; }
+        .header h2 { margin: 0; font-size: 18px; letter-spacing: 1px; }
+
+        #search { 
+            width: 100%; 
+            box-sizing: border-box;
+            padding: 15px; 
+            border-radius: 30px; 
+            border: 2px solid #1a4a7a; 
+            margin-bottom: 20px; 
+            font-size: 16px;
+            outline: none;
+        }
+
+        .card-movil { 
+            background: white; 
+            padding: 15px; 
+            border-radius: 12px; 
+            margin-bottom: 12px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); 
+            border-left: 6px solid #1a4a7a; 
+        }
+
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+        .recibido { background: #bbdefb; color: #0d47a1; }
+        .deposito { background: #fff9c4; color: #f57f17; }
+        .entregado { background: #c8e6c9; color: #1b5e20; }
+        
+        #modalQR { 
+            position: fixed; top:0; left:0; width:100%; height:100%; 
+            background: rgba(0,0,0,0.9); display:none; 
+            flex-direction:column; align-items:center; justify-content:center; z-index:1000; 
+        }
+        .modal-content { background: white; padding: 25px; border-radius: 15px; text-align: center; width: 80%; }
+        #qrcode { display: flex; justify-content: center; margin: 20px 0; }
+        .btn-cerrar { background: var(--rojo); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-weight: bold; width: 100%; }
+        
+        .footer-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #eee; padding: 5px; text-align: center; font-size: 10px; color: #666; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h2 style="margin:0;">MOULIN MÓVIL</h2>
-    <small>Versión 7.0 - Logística</small>
+    <img src="logo.png" onerror="this.src='https://via.placeholder.com/50/102a43/ffffff?text=M'">
+    <div>
+        <h2>MOULIN MÓVIL</h2>
+        <small style="opacity: 0.8;">Gestión de Choferes V7.0</small>
+    </div>
 </div>
 
-<input type="text" id="search" placeholder="Buscar guía, cliente o ciudad..." oninput="renderizarLista()">
+<input type="text" id="search" placeholder="🔍 Buscar guía o destino..." oninput="renderizarLista()">
 
 <div id="lista"></div>
 
 <div id="modalQR">
     <div class="modal-content">
-        <h3 id="qrTitle"></h3>
+        <h3 id="qrTitle" style="margin-top:0; color:#1a4a7a;"></h3>
         <div id="qrcode"></div>
-        <button class="btn-cerrar" onclick="cerrarQR()">CERRAR</button>
+        <button class="btn-cerrar" onclick="cerrarQR()">CERRAR VISOR</button>
     </div>
+</div>
+
+<div class="footer-nav" onclick="cerrarSesion()">
+    Cerrar Sesión de Usuario
 </div>
 
 </body>
