@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MOULIN MÓVIL V70</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
@@ -36,141 +37,133 @@
 
         window.actualizarEstado = (id, nuevoEstado) => {
             update(ref(db, `moulin/guias/${id}`), { estado: nuevoEstado });
-            alert("Estado actualizado!");
         };
 
-        window.renderizarLista = () => {
-            const busq = document.getElementById('search').value.toLowerCase();
+        window.renderizarLista = (filtroEspecial = "") => {
+            const busq = filtroEspecial || document.getElementById('search').value.toLowerCase();
             const filtrados = window.historial.filter(g => 
                 g.num.toLowerCase().includes(busq) || 
-                (g.d_n && g.d_n.toLowerCase().includes(busq)) || 
-                (g.d_l && g.d_l.toLowerCase().includes(busq))
+                (g.d_n && g.d_n.toLowerCase().includes(busq))
             );
 
             document.getElementById('lista').innerHTML = filtrados.map(g => `
-                <div class="card-movil">
+                <div class="card-movil" id="guia-${g.num}">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <b style="font-size:18px; color:#d32f2f;">${g.num}</b>
                         <span class="badge ${g.estado}">${g.estado.toUpperCase()}</span>
                     </div>
-                    <div style="margin:10px 0; font-size:14px; line-height:1.4;">
-                        <b>Destinatario:</b> ${g.d_n}<br>
+                    <div style="margin:10px 0; font-size:14px;">
+                        <b>Destino:</b> ${g.d_n}<br>
                         <b>Localidad:</b> ${g.d_l}<br>
-                        <b>Dirección:</b> ${g.d_d}<br>
-                        ${g.cr_activo === 'S' ? `<div style="margin-top:5px; padding:5px; background:yellow; color:red; font-weight:bold; border:2px solid red; text-align:center;">⚠️ COBRAR REEMBOLSO: $${g.cr_monto}</div>` : ''}
+                        ${g.cr_activo === 'S' ? `<div style="background:yellow; color:red; padding:4px; font-weight:bold; border:1px solid red; margin-top:5px; text-align:center;">REEMBOLSO: $${g.cr_monto}</div>` : ''}
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <select onchange="actualizarEstado('${g.firebaseID}', this.value)" style="flex:1; padding:10px; border-radius:5px; border:1px solid #1a4a7a;">
+                    <div style="display:flex; gap:5px;">
+                        <select onchange="actualizarEstado('${g.firebaseID}', this.value)" style="flex:1; padding:10px; border-radius:5px;">
                             <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
-                            <option value="deposito" ${g.estado==='deposito'?'selected':''}>En Depósito</option>
-                            <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado ✅</option>
+                            <option value="deposito" ${g.estado==='deposito'?'selected':''}>Depósito</option>
+                            <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado</option>
                         </select>
-                        <button onclick="verQR('${g.num}')" style="background:#1a4a7a; color:white; border:none; padding:10px; border-radius:5px; width:50px;">QR</button>
+                        <button onclick="verQR('${g.num}')" style="background:#1a4a7a; color:white; border:none; padding:10px; border-radius:5px;">QR</button>
                     </div>
                 </div>
             `).join('');
         };
 
+        // --- FUNCIONES DE ESCÁNER ---
+        let html5QrCode;
+
+        window.abrirEscaner = () => {
+            document.getElementById('scanner-container').style.display = 'block';
+            html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            
+            html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
+                document.getElementById('search').value = decodedText;
+                window.renderizarLista(decodedText.toLowerCase());
+                window.cerrarEscaner();
+                // Scroll suave hasta la guía encontrada
+                setTimeout(() => {
+                    const el = document.getElementById(`guia-${decodedText}`);
+                    if(el) el.scrollIntoView({behavior: "smooth"});
+                }, 500);
+            });
+        };
+
+        window.cerrarEscaner = () => {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('scanner-container').style.display = 'none';
+                });
+            } else {
+                document.getElementById('scanner-container').style.display = 'none';
+            }
+        };
+
         window.verQR = (num) => {
             document.getElementById('modalQR').style.display = 'flex';
             document.getElementById('qrcode').innerHTML = "";
-            new QRCode(document.getElementById("qrcode"), {
-                text: num,
-                width: 220,
-                height: 220
-            });
-            document.getElementById('qrTitle').innerText = "GUÍA: " + num;
+            new QRCode(document.getElementById("qrcode"), { text: num, width: 200, height: 200 });
+            document.getElementById('qrTitle').innerText = num;
         };
 
         window.cerrarQR = () => { document.getElementById('modalQR').style.display = 'none'; };
-        
-        window.cerrarSesion = () => {
-            sessionStorage.clear();
-            window.location.href = "index.html";
-        };
     </script>
 
     <style>
-        :root { --azul: #102a43; --rojo: #d32f2f; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 10px; padding-bottom: 50px; }
+        body { font-family: sans-serif; background: #eceff1; margin: 0; padding: 10px; padding-bottom: 80px; }
+        .header { background: #102a43; color: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        .header img { height: 40px; }
         
-        /* HEADER CON LOGO */
-        .header { 
-            background: var(--azul); 
-            color: white; 
-            padding: 15px; 
-            border-radius: 12px; 
-            margin-bottom: 15px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            gap: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
-        .header img { height: 50px; width: auto; border-radius: 4px; }
-        .header h2 { margin: 0; font-size: 18px; letter-spacing: 1px; }
+        .search-box { display: flex; gap: 5px; margin-bottom: 15px; }
+        #search { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
+        .btn-scan { background: #1a4a7a; color: white; border: none; padding: 10px; border-radius: 8px; width: 50px; font-size: 20px; }
 
-        #search { 
-            width: 100%; 
-            box-sizing: border-box;
-            padding: 15px; 
-            border-radius: 30px; 
-            border: 2px solid #1a4a7a; 
-            margin-bottom: 20px; 
-            font-size: 16px;
-            outline: none;
-        }
+        .card-movil { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 5px solid #1a4a7a; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .recibido { background: #e3f2fd; color: #1976d2; }
+        .deposito { background: #fff3e0; color: #f57c00; }
+        .entregado { background: #e8f5e9; color: #388e3c; }
 
-        .card-movil { 
-            background: white; 
-            padding: 15px; 
-            border-radius: 12px; 
-            margin-bottom: 12px; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1); 
-            border-left: 6px solid #1a4a7a; 
+        /* Contenedor del Escáner */
+        #scanner-container { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: black; z-index: 2000; display: none; 
         }
+        #reader { width: 100%; height: 80%; }
+        .btn-cancel-scan { width: 100%; padding: 20px; background: #d32f2f; color: white; border: none; font-weight: bold; font-size: 18px; }
 
-        .badge { padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
-        .recibido { background: #bbdefb; color: #0d47a1; }
-        .deposito { background: #fff9c4; color: #f57f17; }
-        .entregado { background: #c8e6c9; color: #1b5e20; }
-        
-        #modalQR { 
-            position: fixed; top:0; left:0; width:100%; height:100%; 
-            background: rgba(0,0,0,0.9); display:none; 
-            flex-direction:column; align-items:center; justify-content:center; z-index:1000; 
-        }
-        .modal-content { background: white; padding: 25px; border-radius: 15px; text-align: center; width: 80%; }
-        #qrcode { display: flex; justify-content: center; margin: 20px 0; }
-        .btn-cerrar { background: var(--rojo); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-weight: bold; width: 100%; }
-        
-        .footer-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #eee; padding: 5px; text-align: center; font-size: 10px; color: #666; }
+        #modalQR { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:1000; }
+        .modal-content { background: white; padding: 20px; border-radius: 10px; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <img src="logo.png" onerror="this.src='https://via.placeholder.com/50/102a43/ffffff?text=M'">
+    <img src="logo.png" onerror="this.src='https://via.placeholder.com/40?text=M'">
     <div>
-        <h2>MOULIN MÓVIL</h2>
-        <small style="opacity: 0.8;">Gestión de Choferes V7.0</small>
+        <h3 style="margin:0;">MOULIN MÓVIL</h3>
+        <small>V7.0 - Escáner de Guías</small>
     </div>
 </div>
 
-<input type="text" id="search" placeholder="🔍 Buscar guía o destino..." oninput="renderizarLista()">
+<div class="search-box">
+    <input type="text" id="search" placeholder="Buscar guía..." oninput="renderizarLista()">
+    <button class="btn-scan" onclick="abrirEscaner()">📷</button>
+</div>
 
 <div id="lista"></div>
 
-<div id="modalQR">
-    <div class="modal-content">
-        <h3 id="qrTitle" style="margin-top:0; color:#1a4a7a;"></h3>
-        <div id="qrcode"></div>
-        <button class="btn-cerrar" onclick="cerrarQR()">CERRAR VISOR</button>
-    </div>
+<div id="scanner-container">
+    <div id="reader"></div>
+    <button class="btn-cancel-scan" onclick="cerrarEscaner()">CANCELAR ESCANEO</button>
 </div>
 
-<div class="footer-nav" onclick="cerrarSesion()">
-    Cerrar Sesión de Usuario
+<div id="modalQR">
+    <div class="modal-content">
+        <h3 id="qrTitle"></h3>
+        <div id="qrcode"></div>
+        <button onclick="cerrarQR()" style="margin-top:10px; padding:10px; width:100%;">CERRAR</button>
+    </div>
 </div>
 
 </body>
