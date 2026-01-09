@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOULIN MÓVIL V70</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCAsCocDQjimpjNo5l2oHTGO82XNTG7tzY",
+            authDomain: "transporte-moulin.firebaseapp.com",
+            databaseURL: "https://transporte-moulin-default-rtdb.firebaseio.com",
+            projectId: "transporte-moulin",
+            storageBucket: "transporte-moulin.firebasestorage.app",
+            messagingSenderId: "1022730425566",
+            appId: "1:1022730425566:web:1ec5b014b71d14ce579e4f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        
+        // Verificación de sesión rápida
+        const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
+        if (!sesion) { window.location.href = "index.html"; }
+
+        window.historial = [];
+
+        // Escuchar cambios en las guías
+        onValue(ref(db, 'moulin/guias'), (snapshot) => {
+            const data = snapshot.val();
+            window.historial = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
+            renderizarLista();
+        });
+
+        window.actualizarEstado = (id, nuevoEstado) => {
+            update(ref(db, `moulin/guias/${id}`), { estado: nuevoEstado });
+        };
+
+        window.renderizarLista = () => {
+            const busq = document.getElementById('search').value.toLowerCase();
+            const filtrados = window.historial.filter(g => 
+                g.num.toLowerCase().includes(busq) || 
+                g.d_n.toLowerCase().includes(busq) || 
+                g.d_l.toLowerCase().includes(busq)
+            );
+
+            document.getElementById('lista').innerHTML = filtrados.map(g => `
+                <div class="card-movil">
+                    <div style="display:flex; justify-content:space-between;">
+                        <b style="font-size:18px; color:#d32f2f;">${g.num}</b>
+                        <span class="badge ${g.estado}">${g.estado.toUpperCase()}</span>
+                    </div>
+                    <div style="margin:8px 0; font-size:14px;">
+                        <b>Destino:</b> ${g.d_n}<br>
+                        <b>Localidad:</b> ${g.d_l}<br>
+                        <b>Dirección:</b> ${g.d_d}<br>
+                        ${g.cr_activo === 'S' ? `<b style="color:red; background:yellow;">REEMBOLSO: $${g.cr_monto}</b>` : ''}
+                    </div>
+                    <div style="display:flex; gap:5px;">
+                        <select onchange="actualizarEstado('${g.firebaseID}', this.value)" style="flex:1; padding:8px;">
+                            <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
+                            <option value="deposito" ${g.estado==='deposito'?'selected':''}>Depósito</option>
+                            <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado</option>
+                        </select>
+                        <button onclick="verQR('${g.num}')" style="background:#1a4a7a; color:white; border:none; padding:8px 15px; border-radius:5px;">QR</button>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        window.verQR = (num) => {
+            document.getElementById('modalQR').style.display = 'flex';
+            document.getElementById('qrcode').innerHTML = "";
+            new QRCode(document.getElementById("qrcode"), {
+                text: num,
+                width: 200,
+                height: 200
+            });
+            document.getElementById('qrTitle').innerText = num;
+        };
+
+        window.cerrarQR = () => {
+            document.getElementById('modalQR').style.display = 'none';
+        };
+    </script>
+
+    <style>
+        body { font-family: sans-serif; background: #eceff1; margin: 0; padding: 10px; }
+        .header { background: #102a43; color: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; }
+        #search { width: 95%; padding: 12px; border-radius: 25px; border: 1px solid #ccc; margin-bottom: 15px; font-size: 16px; }
+        .card-movil { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 5px solid #1a4a7a; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .recibido { background: #e3f2fd; color: #1976d2; }
+        .deposito { background: #fff3e0; color: #f57c00; }
+        .entregado { background: #e8f5e9; color: #388e3c; }
+        
+        /* Estilos del Modal QR */
+        #modalQR { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:1000; }
+        .modal-content { background: white; padding: 20px; border-radius: 10px; text-align: center; }
+        #qrcode { margin: 20px 0; }
+        .btn-cerrar { background: #d32f2f; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h2 style="margin:0;">MOULIN MÓVIL</h2>
+    <small>Versión 7.0 - Logística</small>
+</div>
+
+<input type="text" id="search" placeholder="Buscar guía, cliente o ciudad..." oninput="renderizarLista()">
+
+<div id="lista"></div>
+
+<div id="modalQR">
+    <div class="modal-content">
+        <h3 id="qrTitle"></h3>
+        <div id="qrcode"></div>
+        <button class="btn-cerrar" onclick="cerrarQR()">CERRAR</button>
+    </div>
+</div>
+
+</body>
+</html>
