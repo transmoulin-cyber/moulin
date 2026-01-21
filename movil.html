@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MOULIN MÓVIL V7.1</title>
+    <title>MOULIN MÓVIL V7.2</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     
@@ -28,6 +28,7 @@
         if (!sesion) { window.location.href = "index.html"; }
 
         window.historial = [];
+        window.filtroEstadoActual = 'todos'; // 'todos', 'pendientes', 'entregado'
 
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
             const data = snapshot.val();
@@ -39,13 +40,19 @@
             update(ref(db, `moulin/guias/${id}`), { estado: nuevoEstado });
         };
 
-        // Función para abrir Google Maps
+        window.cambiarFiltro = (nuevoFiltro) => {
+            window.filtroEstadoActual = nuevoFiltro;
+            // Actualizar estilo de botones
+            document.querySelectorAll('.btn-filtro').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('btn-' + nuevoFiltro).classList.add('active');
+            renderizarLista();
+        };
+
         window.abrirMapa = (direccion, localidad) => {
             const query = encodeURIComponent(`${direccion}, ${localidad}, Argentina`);
             window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
         };
 
-        // Función para expandir/colapsar detalles
         window.toggleDetalles = (id) => {
             const el = document.getElementById(`detalles-${id}`);
             el.style.display = el.style.display === 'none' ? 'block' : 'none';
@@ -53,15 +60,23 @@
 
         window.renderizarLista = (filtroEspecial = "") => {
             const busq = filtroEspecial || document.getElementById('search').value.toLowerCase();
-            const filtrados = window.historial.filter(g => 
+            
+            let filtrados = window.historial.filter(g => 
                 g.num.toLowerCase().includes(busq) || 
                 (g.d_n && g.d_n.toLowerCase().includes(busq)) ||
                 (g.d_l && g.d_l.toLowerCase().includes(busq))
             );
 
+            // Aplicar Filtro de Estado (Pendientes vs Entregados)
+            if (window.filtroEstadoActual === 'pendientes') {
+                filtrados = filtrados.filter(g => g.estado === 'recibido' || g.estado === 'deposito');
+            } else if (window.filtroEstadoActual === 'entregado') {
+                filtrados = filtrados.filter(g => g.estado === 'entregado');
+            }
+
             document.getElementById('lista').innerHTML = filtrados.map(g => `
                 <div class="card-movil" id="guia-${g.num}">
-                    <div onclick="toggleDetalles('${g.firebaseID}')" style="cursor:pointer;">
+                    <div onclick="toggleDetalles('${g.firebaseID}')">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <b style="font-size:18px; color:#d32f2f;">${g.num}</b>
                             <span class="badge ${g.estado}">${g.estado.toUpperCase()}</span>
@@ -77,10 +92,7 @@
                         <p><b>Remitente:</b> ${g.r_n || 'No especificado'}</p>
                         <p><b>Bultos:</b> ${g.bultos || '1'}</p>
                         ${g.observaciones ? `<p><b>Obs:</b> ${g.observaciones}</p>` : ''}
-                        
-                        <div style="display:flex; gap:10px; margin-bottom:15px;">
-                            <button onclick="abrirMapa('${g.d_d}', '${g.d_l}')" class="btn-mapa">📍 Ver en Google Maps</button>
-                        </div>
+                        <button onclick="abrirMapa('${g.d_d}', '${g.d_l}')" class="btn-mapa">📍 Ver en Google Maps</button>
                     </div>
 
                     ${g.cr_activo === 'S' ? `<div class="reembolso-tag">REEMBOLSO: $${g.cr_monto}</div>` : ''}
@@ -95,14 +107,19 @@
                     </div>
                 </div>
             `).join('');
+            
+            if(filtrados.length === 0) {
+                document.getElementById('lista').innerHTML = `<div style="text-align:center; padding:40px; color:#666;">No hay guías en esta categoría.</div>`;
+            }
         };
 
-        // --- LÓGICA DE ESCÁNER (Igual a la anterior) ---
+        // --- LÓGICA DE ESCÁNER ---
         let html5QrCode;
         window.abrirEscaner = () => {
             document.getElementById('scanner-container').style.display = 'block';
             html5QrCode = new Html5Qrcode("reader");
             html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
+                window.cambiarFiltro('todos'); // Al escanear, mostramos todos por si acaso
                 document.getElementById('search').value = decodedText;
                 window.renderizarLista(decodedText.toLowerCase());
                 window.cerrarEscaner();
@@ -110,7 +127,6 @@
                     const el = document.getElementById(`guia-${decodedText}`);
                     if(el) {
                         el.scrollIntoView({behavior: "smooth"});
-                        // Abrimos los detalles automáticamente al escanear
                         const idFirebase = window.historial.find(h => h.num === decodedText)?.firebaseID;
                         if(idFirebase) toggleDetalles(idFirebase);
                     }
@@ -137,13 +153,18 @@
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #eceff1; margin: 0; padding: 10px; padding-bottom: 30px; }
         .header { background: #102a43; color: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
-        .search-box { display: flex; gap: 5px; margin-bottom: 15px; }
+        
+        .search-box { display: flex; gap: 5px; margin-bottom: 10px; }
         #search { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
         .btn-scan { background: #1a4a7a; color: white; border: none; padding: 10px; border-radius: 8px; width: 55px; font-size: 22px; }
 
+        /* Estilos de la barra de filtros */
+        .filtros-container { display: flex; gap: 5px; margin-bottom: 15px; }
+        .btn-filtro { flex: 1; padding: 8px; border-radius: 20px; border: 1px solid #1a4a7a; background: white; color: #1a4a7a; font-size: 12px; font-weight: bold; cursor: pointer; }
+        .btn-filtro.active { background: #1a4a7a; color: white; }
+
         .card-movil { background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 6px solid #1a4a7a; }
         .detalles-extra p { margin: 5px 0; font-size: 14px; color: #444; }
-        
         .btn-mapa { width: 100%; padding: 12px; background: #34a853; color: white; border: none; border-radius: 6px; font-weight: bold; margin-top: 10px; }
         .reembolso-tag { background: #fff9c4; color: #d32f2f; padding: 8px; font-weight: bold; border: 1px solid #fbc02d; margin-top: 10px; text-align: center; border-radius: 5px; }
         
@@ -166,13 +187,19 @@
     <div style="background: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: #102a43; font-weight: bold;">M</div>
     <div>
         <h3 style="margin:0;">MOULIN MÓVIL</h3>
-        <small>Logística V7.1 - Enlace Maps</small>
+        <small>V7.2 - Gestión de Pendientes</small>
     </div>
 </div>
 
 <div class="search-box">
-    <input type="text" id="search" placeholder="Buscar guía o cliente..." oninput="renderizarLista()">
+    <input type="text" id="search" placeholder="Buscar guía..." oninput="renderizarLista()">
     <button class="btn-scan" onclick="abrirEscaner()">📷</button>
+</div>
+
+<div class="filtros-container">
+    <button id="btn-todos" class="btn-filtro active" onclick="cambiarFiltro('todos')">TODOS</button>
+    <button id="btn-pendientes" class="btn-filtro" onclick="cambiarFiltro('pendientes')">PENDIENTES</button>
+    <button id="btn-entregado" class="btn-filtro" onclick="cambiarFiltro('entregado')">ENTREGADOS</button>
 </div>
 
 <div id="lista"></div>
