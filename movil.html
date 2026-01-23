@@ -30,11 +30,29 @@
         window.historial = [];
         window.filtroEstadoActual = 'todos'; // 'todos', 'pendientes', 'entregado'
 
-        onValue(ref(db, 'moulin/guias'), (snapshot) => {
-            const data = snapshot.val();
-            window.historial = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
-            renderizarLista();
+onValue(ref(db, 'moulin/guias'), (snapshot) => {
+    const data = snapshot.val();
+    const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
+    
+    let listaCompleta = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
+
+    // FILTRO DE SEGURIDAD BI-DIRECCIONAL (ORIGEN O DESTINO)
+    if (sesion.prefijo !== "TODO") {
+        window.historial = listaCompleta.filter(g => {
+            const prefijoUser = sesion.prefijo.toUpperCase();
+            
+            // Verificamos si el origen (o_l) o el destino (d_l) coinciden con la sucursal del usuario
+            const coincideOrigen = g.o_l && g.o_l.toUpperCase().includes(prefijoUser);
+            const coincideDestino = g.d_l && g.d_l.toUpperCase().includes(prefijoUser);
+
+            return coincideOrigen || coincideDestino;
         });
+    } else {
+        window.historial = listaCompleta;
+    }
+
+    renderizarLista();
+});
 
         window.actualizarEstado = (id, nuevoEstado) => {
             update(ref(db, `moulin/guias/${id}`), { estado: nuevoEstado });
@@ -219,3 +237,4 @@
 
 </body>
 </html>
+
