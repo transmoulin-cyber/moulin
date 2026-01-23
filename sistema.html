@@ -2,14 +2,13 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>MOULIN SISTEMA V7.5 - RECONQUISTA</title>
+    <title>MOULIN SISTEMA V7.6 - RECONQUISTA</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getDatabase, ref, set, push, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
-        // CONFIGURACIÓN FIREBASE MOULIN
         const firebaseConfig = {
             apiKey: "AIzaSyCAsCocDQjimpjNo5l2oHTGO82XNTG7tzY",
             authDomain: "transporte-moulin.firebaseapp.com",
@@ -25,22 +24,20 @@
         const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
         if (!sesion) { window.location.href = "index.html"; }
 
-        // LIMPIEZA DE PREFIJOS: Fernando (Admin/Rec) siempre es RECON
         const PREFIJO_BASE = sesion.prefijo;
-        const PREFIJO = (PREFIJO_BASE === "TODO" || PREFIJO_BASE === "ADM" || PREFIJO_BASE === "REC") ? "RECON" : PREFIJO_BASE;
-        const NOMBRE_OPERADOR = sesion.nombre;
+        const PREFIJO = (["TODO","ADM","REC"].includes(PREFIJO_BASE)) ? "RECON" : PREFIJO_BASE;
+        const NOMBRE_OP = sesion.nombre;
 
         window.historialGlobal = [];
         window.clientesGlobal = {}; 
-        window.filtroEstado = 'todos';
         let proximoNumero = 1001;
 
-        // Carga de Datos desde Nube
+        // PRECIOS PREDETERMINADOS (Fernando)
+        const PRECIOS_BASE = { "Bulto": 18000, "Pallet": 180000, "Sobre": 15000, "Caja": 18000 };
+
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
             const data = snapshot.val();
             window.historialGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
-            
-            // Calculamos próximo número solo basándonos en el prefijo actual
             const misGuias = window.historialGlobal.filter(g => g.num.startsWith(PREFIJO));
             if (misGuias.length > 0) {
                 const max = Math.max(...misGuias.map(g => parseInt(g.num.split('-')[1]) || 0));
@@ -52,11 +49,10 @@
 
         onValue(ref(db, 'moulin/clientes'), (snapshot) => {
             window.clientesGlobal = snapshot.val() || {};
-            const datalist = document.getElementById('lista_clientes');
-            datalist.innerHTML = Object.keys(window.clientesGlobal).map(c => `<option value="${c}">`).join('');
+            document.getElementById('lista_clientes').innerHTML = Object.keys(window.clientesGlobal).map(c => `<option value="${c}">`).join('');
         });
 
-        window.completarCliente = function(tipo) {
+        window.completarCliente = (tipo) => {
             const n = document.getElementById(`${tipo}_n`).value.trim();
             const c = window.clientesGlobal[Object.keys(window.clientesGlobal).find(k => k.toLowerCase() === n.toLowerCase())];
             if (c) {
@@ -67,144 +63,97 @@
             }
         };
 
-        window.renderHistorial = function() {
+        window.actualizarPrecioXDefecto = (inputTipo) => {
+            const tr = inputTipo.closest('tr');
+            const unitarioInput = tr.querySelector('.i-unit');
+            unitarioInput.value = PRECIOS_BASE[inputTipo.value] || 0;
+            calcularTotales();
+        };
+
+        window.renderHistorial = () => {
             const busq = document.getElementById('busq').value.toLowerCase();
-            const fDesde = document.getElementById('fecha_desde').value;
-            const fHasta = document.getElementById('fecha_hasta').value;
-
             const filtrados = window.historialGlobal.filter(g => {
-                // Filtro de Sucursal (Fernando ve RECON, REC y TODO)
-                let sucVisible = false;
-                if (PREFIJO === "RECON") {
-                    sucVisible = g.num.startsWith("RECON") || g.num.startsWith("REC") || g.num.startsWith("TODO");
-                } else {
-                    sucVisible = g.num.startsWith(PREFIJO);
-                }
-
-                // Filtro de Fecha
-                let cumpleFecha = true;
-                if (fDesde || fHasta) {
-                    const p = g.fecha.split('/');
-                    const fGuia = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-                    if (fDesde && fGuia < fDesde) cumpleFecha = false;
-                    if (fHasta && fGuia > fHasta) cumpleFecha = false;
-                }
-
-                // Filtro de búsqueda y estado
-                const cumpleBusq = g.num.toLowerCase().includes(busq) || (g.r_n && g.r_n.toLowerCase().includes(busq)) || (g.d_n && g.d_n.toLowerCase().includes(busq));
-                const cumpleEst = (window.filtroEstado === 'todos' || g.estado === window.filtroEstado);
-
-                return sucVisible && cumpleFecha && cumpleBusq && cumpleEst;
+                let suc = (PREFIJO === "RECON") ? (g.num.startsWith("RECON") || g.num.startsWith("REC") || g.num.startsWith("TODO")) : g.num.startsWith(PREFIJO);
+                return suc && (g.num.toLowerCase().includes(busq) || g.r_n.toLowerCase().includes(busq) || g.d_n.toLowerCase().includes(busq));
             });
 
-            document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `
+            document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 20).map(g => `
                 <tr>
                     <td><b>${g.num}</b></td>
                     <td>${g.fecha}</td>
-                    <td>${g.o_l} > ${g.d_l}</td>
                     <td>${g.r_n} > ${g.d_n}</td>
                     <td>$${g.total}</td>
-                    <td><span style="font-size:10px">${g.pago_en}</span></td>
-                    <td>
-                        <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:10px;">
-                            <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
-                            <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado</option>
-                        </select>
-                    </td>
+                    <td>${g.estado}</td>
                     <td><button onclick="reimprimir('${g.num}')">🖨️</button></td>
                 </tr>
             `).join('');
         };
 
-        window.actualizarEstadoNube = (id, est) => update(ref(db, `moulin/guias/${id}`), { estado: est });
-
         window.confirmarYEmitir = function() {
-            const r_n = document.getElementById('r_n').value;
-            const d_n = document.getElementById('d_n').value;
-            if(!r_n || !d_n) return alert("Faltan clientes.");
-
+            if(!document.getElementById('r_n').value || !document.getElementById('d_n').value) return alert("Faltan clientes.");
             const tot = calcularTotales();
             const idU = Date.now();
-            const nuevaGuia = {
+            const g = {
                 num: `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`,
                 fecha: new Date().toLocaleDateString(),
-                r_n, r_t: document.getElementById('r_t').value, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value, r_cbu: document.getElementById('r_cbu').value,
-                d_n, d_t: document.getElementById('d_t').value, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value, d_cbu: document.getElementById('d_cbu').value,
-                o_l: document.getElementById('r_l').value, d_l: document.getElementById('d_l').value,
-                flete: tot.flete.toFixed(2), seg: tot.seg.toFixed(2), total: tot.total.toFixed(2), v_decl: tot.v_decl.toFixed(2),
+                r_n: document.getElementById('r_n').value, r_t: document.getElementById('r_t').value, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value, r_cbu: document.getElementById('r_cbu').value,
+                d_n: document.getElementById('d_n').value, d_t: document.getElementById('d_t').value, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value, d_cbu: document.getElementById('d_cbu').value,
+                flete: tot.flete.toFixed(2), seg: tot.seg.toFixed(2), total: tot.total.toFixed(2), v_decl: tot.v_decl.toFixed(2), cant_t: tot.cant_t,
                 pago_en: document.getElementById('pago_en').value, condicion: document.getElementById('condicion').value,
                 cr_activo: document.getElementById('cr_act').value, cr_monto: document.getElementById('cr_monto').value,
-                estado: 'recibido', emisor: NOMBRE_OPERADOR,
+                p_seg_aplicado: document.getElementById('p_seg').value,
+                estado: 'recibido', emisor: NOMBRE_OP,
                 items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(r => ({
                     c: r.querySelector('.i-cant').value, t: r.querySelector('.i-tipo').value, d: r.querySelector('.i-det').value, u: r.querySelector('.i-unit').value, vd: r.querySelector('.i-decl').value
                 }))
             };
-
             const upds = {};
-            upds[`moulin/guias/${idU}`] = nuevaGuia;
-            upds[`moulin/clientes/${r_n}`] = { t: nuevaGuia.r_t, d: nuevaGuia.r_d, l: nuevaGuia.r_l, cbu: nuevaGuia.r_cbu };
-            upds[`moulin/clientes/${d_n}`] = { t: nuevaGuia.d_t, d: nuevaGuia.d_d, l: nuevaGuia.d_l, cbu: nuevaGuia.d_cbu };
-
-            update(ref(db), upds).then(() => {
-                imprimir(nuevaGuia);
-                setTimeout(() => location.reload(), 800);
-            });
+            upds[`moulin/guias/${idU}`] = g;
+            update(ref(db), upds).then(() => { imprimir(g); setTimeout(() => location.reload(), 800); });
         };
     </script>
 
     <style>
         :root { --azul: #1a4a7a; --oscuro: #102a43; --verde: #38a169; }
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; margin: 0; padding: 15px; padding-bottom: 100px; }
-        .hoja { background: white; max-width: 1000px; margin: auto; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .caja { background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; margin-bottom: 15px; border-radius: 8px; }
-        input, select { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; width: 95%; margin-bottom: 5px; }
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-        .tabla-items { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .tabla-items th { background: var(--azul); color: white; padding: 10px; font-size: 13px; }
-        .tabla-items td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
-        .btn-imprimir { background: var(--verde); color: white; border: none; padding: 15px 40px; border-radius: 30px; font-size: 20px; cursor: pointer; font-weight: bold; }
-        
+        body { font-family: sans-serif; background: #f0f4f8; margin: 0; padding: 15px; padding-bottom: 110px; }
+        .hoja { background: white; max-width: 950px; margin: auto; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .caja { background: #f8fafc; padding: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px; border-radius: 6px; }
+        input, select { padding: 7px; border: 1px solid #cbd5e1; border-radius: 4px; width: 95%; margin-bottom: 4px; font-size: 13px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .tabla-items { width: 100%; border-collapse: collapse; }
+        .tabla-items th { background: var(--azul); color: white; padding: 8px; font-size: 12px; }
+        .btn-imprimir { background: var(--verde); color: white; border: none; padding: 15px 40px; border-radius: 30px; font-size: 18px; cursor: pointer; font-weight: bold; }
         @media print {
             .no-print { display: none !important; }
             #seccion-impresion { display: block !important; }
-            .cupon { height: 14cm; border: 1px solid #000; padding: 20px; margin-bottom: 10px; display: flex; flex-direction: column; page-break-after: always; }
-            .resaltado { background: #eee !important; font-weight: bold; }
+            .cupon { height: 13.8cm; border: 1px solid #000; padding: 15px; margin-bottom: 10px; display: flex; flex-direction: column; page-break-after: always; font-size: 12px; }
+            .resaltado { background: #eee !important; font-weight: bold; padding: 0 4px; }
         }
         #seccion-impresion { display: none; }
     </style>
 </head>
 <body>
-
 <datalist id="lista_clientes"></datalist>
 
 <div class="hoja no-print">
-    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 4px solid var(--azul); padding-bottom:10px; margin-bottom:20px;">
-        <h1 style="margin:0; color:var(--oscuro);">MOULIN LOGÍSTICA</h1>
-        <div style="text-align:right">
-            <small>Operador: <b id="op_name"></b></small><br>
-            <b id="display_guia" style="font-size:32px; color:#e53e3e;">---</b>
-        </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid var(--azul); margin-bottom:15px;">
+        <h2 style="margin:0;">MOULIN V7.6</h2>
+        <b id="display_guia" style="font-size:28px; color:red;">---</b>
     </div>
 
     <div class="caja">
-        <b>REMITENTE</b>
-        <input type="text" id="r_n" list="lista_clientes" placeholder="Nombre / Empresa" oninput="completarCliente('r')">
-        <div class="grid-4">
-            <input type="text" id="r_t" placeholder="Teléfono">
-            <input type="text" id="r_d" placeholder="Dirección">
-            <input type="text" id="r_l" placeholder="Localidad">
-            <input type="text" id="r_cbu" placeholder="CBU/Alias">
-        </div>
-    </div>
-
-    <div class="caja">
-        <b>DESTINATARIO</b>
-        <input type="text" id="d_n" list="lista_clientes" placeholder="Nombre / Empresa" oninput="completarCliente('d')">
-        <div class="grid-4">
-            <input type="text" id="d_t" placeholder="Teléfono">
-            <input type="text" id="d_d" placeholder="Dirección">
-            <input type="text" id="d_l" placeholder="Localidad">
-            <input type="text" id="d_cbu" placeholder="CBU/Alias">
+        <b>REMITENTE / DESTINATARIO</b>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+            <div>
+                <input type="text" id="r_n" list="lista_clientes" placeholder="Remitente" oninput="completarCliente('r')">
+                <input type="text" id="r_d" placeholder="Dirección"><input type="text" id="r_l" placeholder="Localidad">
+                <input type="text" id="r_t" placeholder="Teléfono"><input type="text" id="r_cbu" placeholder="CBU/Alias">
+            </div>
+            <div>
+                <input type="text" id="d_n" list="lista_clientes" placeholder="Destinatario" oninput="completarCliente('d')">
+                <input type="text" id="d_d" placeholder="Dirección"><input type="text" id="d_l" placeholder="Localidad">
+                <input type="text" id="d_t" placeholder="Teléfono"><input type="text" id="d_cbu" placeholder="CBU/Alias">
+            </div>
         </div>
     </div>
 
@@ -213,35 +162,34 @@
             <thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unitario $</th><th>V.Decl $</th><th></th></tr></thead>
             <tbody id="cuerpoItems"></tbody>
         </table>
-        <button onclick="agregarFila()" style="margin-top:10px;">+ Agregar Bulto</button>
+        <button onclick="agregarFila()">+ Agregar</button>
     </div>
 
-    <div class="caja" style="background:#edf2f7">
+    <div class="caja" style="background:#edf2f7;">
         <div class="grid-4">
             <select id="pago_en"><option>PAGO EN ORIGEN</option><option>PAGO EN DESTINO</option></select>
             <select id="condicion"><option>CONTADO</option><option>CTA CTE</option></select>
-            <select id="cr_act"><option value="N">CONTRARREEMBOLSO: NO</option><option value="S">CONTRARREEMBOLSO: SI</option></select>
-            <input type="number" id="cr_monto" placeholder="Monto CR $" value="0">
+            <div style="display:flex; align-items:center; background:white; padding:2px; border:1px solid #ccc; border-radius:4px;">
+                <label style="font-size:10px; padding:0 3px;">Seg%</label>
+                <input type="number" id="p_seg" value="0.8" step="0.1" style="width:45px; border:none; margin:0;" oninput="calcularTotales()">
+            </div>
+            <div style="display:flex; gap:3px;">
+                <select id="cr_act"><option value="N">CR: NO</option><option value="S">CR: SI</option></select>
+                <input type="number" id="cr_monto" placeholder="$" value="0">
+            </div>
         </div>
     </div>
 
-    <div class="caja">
-        <h3>Historial de Movimientos</h3>
-        <div class="grid-4" style="margin-bottom:15px;">
-            <input type="text" id="busq" placeholder="Buscar por número o cliente..." oninput="renderHistorial()">
-            <input type="date" id="fecha_desde" oninput="renderHistorial()">
-            <input type="date" id="fecha_hasta" oninput="renderHistorial()">
-        </div>
-        <table class="tabla-items">
-            <thead><tr><th>Nro Guía</th><th>Fecha</th><th>Origen > Destino</th><th>Clientes</th><th>Total</th><th>Pago</th><th>Estado</th><th>Acción</th></tr></thead>
-            <tbody id="listaHistorial"></tbody>
-        </table>
-    </div>
+    <input type="text" id="busq" placeholder="Buscar en historial..." oninput="renderHistorial()" style="width:300px;">
+    <table class="tabla-items">
+        <thead><tr style="background:#eee;"><th>Guía</th><th>Fecha</th><th>Ruta</th><th>Total</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="listaHistorial"></tbody>
+    </table>
 </div>
 
-<div class="no-print" style="position:fixed; bottom:0; left:0; width:100%; background:var(--oscuro); color:white; padding:20px; display:flex; justify-content:space-around; align-items:center; z-index:100;">
-    <div id="total_txt" style="font-size:28px; font-weight:bold; color:#48bb78;">TOTAL: $ 0.00</div>
-    <button class="btn-imprimir" onclick="confirmarYEmitir()">GRABAR E IMPRIMIR GUÍA</button>
+<div class="no-print" style="position:fixed; bottom:0; left:0; width:100%; background:var(--oscuro); color:white; padding:15px; display:flex; justify-content:space-around; align-items:center;">
+    <div id="total_txt" style="font-size:22px; font-weight:bold; color:#48bb78;">TOTAL: $ 0.00</div>
+    <button class="btn-imprimir" onclick="confirmarYEmitir()">GRABAR E IMPRIMIR</button>
 </div>
 
 <div id="seccion-impresion"></div>
@@ -249,77 +197,66 @@
 <script>
     function agregarFila() {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo"><option>Bulto</option><option>Pallet</option><option>Sobre</option><option>Caja</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="0" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
+        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td>
+            <td><select class="i-tipo" onchange="actualizarPrecioXDefecto(this)"><option>Bulto</option><option>Pallet</option><option>Sobre</option><option>Caja</option></select></td>
+            <td><input type="text" class="i-det"></td>
+            <td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td>
+            <td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td>
+            <td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
         document.getElementById('cuerpoItems').appendChild(tr);
         calcularTotales();
     }
 
     function calcularTotales() {
-        let f = 0, vd = 0;
+        let f = 0, vd = 0, cant = 0;
         document.querySelectorAll('#cuerpoItems tr').forEach(r => {
-            f += (parseFloat(r.querySelector('.i-cant').value)||0) * (parseFloat(r.querySelector('.i-unit').value)||0);
-            vd += (parseFloat(r.querySelector('.i-decl').value)||0);
+            let c = parseFloat(r.querySelector('.i-cant').value)||0;
+            f += c * (parseFloat(r.querySelector('.i-unit').value)||0);
+            vd += parseFloat(r.querySelector('.i-decl').value)||0;
+            cant += c;
         });
-        let t = f + (vd * 0.008); // 0.8% de seguro
-        document.getElementById('total_txt').innerText = `TOTAL: $ ${t.toFixed(2)}`;
-        return { flete: f, seg: (vd * 0.008), total: t, v_decl: vd };
+        let pSeg = parseFloat(document.getElementById('p_seg').value)||0;
+        let s = vd * (pSeg / 100);
+        let t = f + s;
+        document.getElementById('total_txt').innerHTML = `<small style="font-size:12px; color:#ccc;">Bultos: ${cant} | Flete: $${f} | Seg: $${s.toFixed(2)}</small><br>TOTAL: $ ${t.toFixed(2)}`;
+        return { flete: f, seg: s, total: t, v_decl: vd, cant_t: cant };
     }
 
     function imprimir(g) {
-        let itemsHTML = g.items.map(i => `<tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d}</td><td align="right">$${i.u}</td><td align="right">$${i.vd}</td></tr>`).join('');
+        let itemsH = g.items.map(i => `<tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d}</td><td align="right">$${i.u}</td><td align="right">$${i.vd}</td></tr>`).join('');
         let html = "";
-        ['ORIGINAL (Para el Transporte)', 'DUPLICADO (Para el Cliente)'].forEach((tit, idx) => {
-            html += `
-            <div class="cupon">
-                <div style="display:flex; justify-content:space-between; border-bottom:2px solid #000; padding-bottom:10px;">
-                    <div style="display:flex; align-items:center; gap:15px; width:60%">
-                        <img src="logo.png" style="height:75px" onerror="this.src='https://via.placeholder.com/80x75?text=MOULIN'">
-                        <div>
-                            <b style="font-size:22px;">TRANSPORTE MOULIN</b><br>
-                            <small>Logística Integral - <b>CASA CENTRAL RECONQUISTA</b></small><br>
-                            <small>Calle Pública s/n | Tel: 3482-421234 | CUIT: 30-71234567-8</small>
-                        </div>
-                    </div>
-                    <div id="qr_${idx}" style="width:75px; height:75px;"></div>
-                    <div style="text-align:right">
-                        <small>${tit}</small><br>
-                        <b style="font-size:28px; color:red;">${g.num}</b><br>
-                        <b>Fecha: ${g.fecha}</b>
-                    </div>
+        ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit, idx) => {
+            html += `<div class="cupon">
+                <div style="display:flex; justify-content:space-between; border-bottom:2px solid #000; padding-bottom:5px;">
+                    <div><b style="font-size:18px;">TRANSPORTE MOULIN</b><br><small>Reconquista - CUIT: 30-XXXXXXXX-X - Tel: 3482-XXXXXX</small></div>
+                    <div id="qr_${idx}" style="width:60px; height:60px;"></div>
+                    <div style="text-align:right"><small>${tit}</small><br><b style="font-size:22px; color:red;">${g.num}</b><br><b>${g.fecha}</b></div>
                 </div>
-                ${g.cr_activo==='S' ? `<div style="background:#000; color:#fff; padding:10px; text-align:center; font-size:20px; font-weight:bold; margin:10px 0;">⚠️ COBRAR CONTRA-REEMBOLSO: $ ${g.cr_monto}</div>` : ''}
-                <div style="display:grid; grid-template-columns:1fr 1fr; border:2px solid #000; margin:10px 0; padding:12px; font-size:14px;">
-                    <div style="border-right:1px solid #000; padding-right:10px;">
-                        <b>REMITENTE:</b> ${g.r_n}<br>
-                        Dir: ${g.r_d} | Loc: <span class="resaltado">${g.r_l}</span><br>
-                        Tel: ${g.r_t}
-                    </div>
-                    <div style="padding-left:10px;">
-                        <b>DESTINATARIO:</b> ${g.d_n}<br>
-                        Dir: ${g.d_d} | Loc: <span class="resaltado">${g.d_l}</span><br>
-                        Tel: ${g.d_t}
-                    </div>
+                ${g.cr_activo==='S' ? `<div style="background:#000; color:#fff; text-align:center; padding:5px; font-weight:bold; margin:5px 0;">COBRAR CONTRA-REEMBOLSO: $ ${g.cr_monto}</div>` : ''}
+                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:5px 0; padding:8px; line-height:1.3;">
+                    <div style="border-right:1px solid #000; padding-right:5px;"><b>REMITENTE:</b> ${g.r_n}<br>Dir: ${g.r_d} | Loc: <span class="resaltado">${g.r_l}</span><br>Tel: ${g.r_t}</div>
+                    <div style="padding-left:5px;"><b>DESTINATARIO:</b> ${g.d_n}<br>Dir: ${g.d_d} | Loc: <span class="resaltado">${g.d_l}</span><br>Tel: ${g.d_t}</div>
                 </div>
                 <table class="tabla-items" style="border:1px solid #000;">
-                    <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unitario</th><th>Decl.</th></tr></thead>
-                    <tbody>${itemsHTML}</tbody>
+                    <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th><th>V.Decl</th></tr></thead>
+                    <tbody>${itemsH}</tbody>
                 </table>
-                <div style="display:flex; justify-content:space-between; margin-top:10px;">
-                    <div><b>PAGO EN:</b> ${g.pago_en}<br><b>VALOR DECLARADO:</b> $${g.v_decl}</div>
-                    <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg}<br><b style="font-size:26px;">TOTAL: $${g.total}</b></div>
+                <div style="display:flex; justify-content:space-between; margin-top:5px; font-weight:bold; font-size:14px;">
+                    <div>TOTAL BULTOS: ${g.cant_t}</div>
+                    <div style="text-align:right;">Flete: $${g.flete} | Seg (${g.p_seg_aplicado}%): $${g.seg}<br><span style="font-size:20px;">TOTAL: $${g.total}</span></div>
                 </div>
-                <div style="margin-top:auto; text-align:right;"><div style="display:inline-block; border-top:2px solid #000; width:300px; text-align:center; padding-top:5px;">Firma y Aclaración Receptor</div></div>
+                <div style="margin-top:auto; text-align:right;"><div style="border-top:1px solid #000; width:250px; text-align:center; margin-left:auto;">Firma Receptor</div></div>
             </div>`;
         });
         document.getElementById('seccion-impresion').innerHTML = html;
         setTimeout(() => {
-            new QRCode(document.getElementById("qr_0"), { text: g.num, width: 75, height: 75 });
-            new QRCode(document.getElementById("qr_1"), { text: g.num, width: 75, height: 75 });
+            new QRCode(document.getElementById("qr_0"), { text: g.num, width: 60, height: 60 });
+            new QRCode(document.getElementById("qr_1"), { text: g.num, width: 60, height: 60 });
             window.print();
         }, 300);
     }
     window.reimprimir = (n) => imprimir(window.historialGlobal.find(x => x.num === n));
-    window.onload = () => { document.getElementById('op_name').innerText = sesion.nombre; agregarFila(); };
+    window.onload = () => { agregarFila(); };
 </script>
 </body>
 </html>
