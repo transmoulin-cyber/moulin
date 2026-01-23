@@ -62,10 +62,12 @@
 </div>
 
 <script>
-    const usuarios = [
-        { u: "admin", p: "moulin2024", nombre: "Administración", prefijo: "ADM" },
-        { u: "chofer1", p: "moulin123", nombre: "Chofer 01", prefijo: "CH1" }
-    ];
+   const usuarios = [
+    { u: "admin", p: "moulin2024", nombre: "Administración", prefijo: "RECON" }, // El admin ve todo
+    { u: "rosario", p: "moulinros", nombre: "Chofer Rosario", prefijo: "ROS" },
+    { u: "santafe", p: "moulinsfe", nombre: "Chofer Santa Fe", prefijo: "STAFE" }
+    { u: "BSAS", p: "moulinsfe", nombre: "Chofer BSAS", prefijo: "BSAS" }   
+];
 
     function intentarIngreso() {
         const uInput = document.getElementById('user').value;
@@ -95,6 +97,3 @@
         if(e.key === 'Enter') intentarIngreso();
     });
 </script>
-
-</body>
-</html>
