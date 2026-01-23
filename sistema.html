@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>SISTEMA MOULIN V70 - CONTROL TOTAL</title>
+    <title>SISTEMA MOULIN V7.1 - CONTROL SEGURO</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <script type="module">
@@ -72,18 +72,45 @@
             renderHistorial();
         };
 
+        // --- LÓGICA DE FILTRADO SEGURO (BI-DIRECCIONAL) ---
         window.renderHistorial = function() {
             const b = document.getElementById('busq').value.toLowerCase();
+            const prefijoUser = sesion.prefijo.toUpperCase();
+
             const filtrados = window.historialGlobal.filter(g => {
+                // 1. Primero filtramos por seguridad (Origen o Destino)
+                let visible = false;
+                if (prefijoUser === "TODO" || prefijoUser === "ADM") {
+                    visible = true; // Admin ve todo
+                } else {
+                    const destino = (g.d_l || "").toUpperCase();
+                    const origen = (g.o_l || "").toUpperCase();
+
+                    if (prefijoUser === "STAFE") {
+                        visible = destino.includes("SANTA FE") || destino.includes("STAFE") || origen.includes("SANTA FE") || origen.includes("STAFE");
+                    } else if (prefijoUser === "ROS") {
+                        visible = destino.includes("ROSARIO") || destino.includes("ROS") || origen.includes("ROSARIO") || origen.includes("ROS");
+                    } else if (prefijoUser === "REC") {
+                        visible = destino.includes("RECONQUISTA") || destino.includes("REC") || origen.includes("RECONQUISTA") || origen.includes("REC");
+                    } else {
+                        visible = destino.includes(prefijoUser) || origen.includes(prefijoUser);
+                    }
+                }
+
+                // 2. Filtramos por la búsqueda del usuario
                 const coincideBusq = g.num.toLowerCase().includes(b) || (g.r_n && g.r_n.toLowerCase().includes(b)) || (g.d_n && g.d_n.toLowerCase().includes(b));
+                
+                // 3. Filtramos por el estado (Recibido, Depósito, etc)
                 const coincideEst = window.filtroEstado === 'todos' || g.estado === window.filtroEstado;
-                return coincideBusq && coincideEst;
+
+                return visible && coincideBusq && coincideEst;
             });
+
             document.getElementById('contador').innerText = `${filtrados.length} guías`;
             document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `
                 <tr>
                     <td><b>${g.num}</b></td>
-                    <td>${g.r_n} > ${g.d_n}</td>
+                    <td>${g.r_l} > ${g.d_l}</td>
                     <td>$${g.total}</td>
                     <td>
                         <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px;">
@@ -106,6 +133,7 @@
                 fecha: new Date().toLocaleDateString(),
                 timestamp: idU,
                 r_n: document.getElementById('r_n').value, r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value,
+                o_l: document.getElementById('r_l').value, // Guardamos el origen explícitamente
                 d_n: document.getElementById('d_n').value, d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value,
                 flete: d.flete.toFixed(2), seg: d.seg.toFixed(2), total: d.total.toFixed(2), v_decl: d.v_decl.toFixed(2),
                 pago_en: document.getElementById('pago_en').value, condicion: document.getElementById('condicion').value,
@@ -155,28 +183,28 @@
 
 <div class="hoja no-print">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid var(--azul); margin-bottom:10px;">
-        <h2 style="margin:0; color: var(--oscuro);">MOULIN CLOUD V70</h2>
+        <h2 style="margin:0; color: var(--oscuro);">MOULIN CLOUD V7.1</h2>
         <b id="display_guia" style="font-size:26px; color:var(--rojo)">...</b>
     </div>
 
     <div class="caja">
-        <b>REMITENTE</b>
+        <b>REMITENTE (ORIGEN)</b>
         <input type="text" id="r_n" list="lista_clientes" placeholder="Nombre" oninput="completarCliente('r')">
         <div class="grid-datos">
             <input type="text" id="r_t" placeholder="Tel">
             <input type="text" id="r_d" placeholder="Dirección">
-            <input type="text" id="r_l" placeholder="Localidad">
+            <input type="text" id="r_l" placeholder="Localidad (Ej: Santa Fe)">
             <input type="text" id="r_cbu" placeholder="CBU/Alias">
         </div>
     </div>
 
     <div class="caja">
-        <b>DESTINATARIO</b>
+        <b>DESTINATARIO (DESTINO)</b>
         <input type="text" id="d_n" list="lista_clientes" placeholder="Nombre" oninput="completarCliente('d')">
         <div class="grid-datos">
             <input type="text" id="d_t" placeholder="Tel">
             <input type="text" id="d_d" placeholder="Dirección">
-            <input type="text" id="d_l" placeholder="Localidad">
+            <input type="text" id="d_l" placeholder="Localidad (Ej: Rosario)">
             <input type="text" id="d_cbu" placeholder="CBU/Alias">
         </div>
     </div>
@@ -254,10 +282,10 @@
                 </div>
                 ${g.cr_activo === 'S' ? `<div class="cr-box">⚠️ COBRAR CONTRA REEMBOLSO: $ ${g.cr_monto}</div>` : ''}
                 <div style="display:grid; grid-template-columns:1fr 1fr; border:2px solid #000; margin:10px 0; padding:12px; font-size:13px;">
-                    <div style="border-right:1px solid #000; padding-right:10px;"><b>REMITENTE:</b> ${g.r_n}<br><b>Dir:</b> ${g.r_d} | <b>Tel:</b> ${g.r_t}<br><b>Loc:</b> <span class="resaltado">${g.r_l}</span><br><b>CBU:</b> ${g.r_cbu}</div>
-                    <div style="padding-left:10px;"><b>DESTINATARIO:</b> ${g.d_n}<br><b>Dir:</b> ${g.d_d} | <b>Tel:</b> ${g.d_t}<br><b>Loc:</b> <span class="resaltado">${g.d_l}</span><br><b>CBU:</b> ${g.d_cbu}</div>
+                    <div style="border-right:1px solid #000; padding-right:10px;"><b>REMITENTE:</b> ${g.r_n}<br><b>Dir:</b> ${g.r_d} | <b>Tel:</b> ${g.r_t}<br><b>Loc:</b> <span class="resaltado">${g.r_l}</span></div>
+                    <div style="padding-left:10px;"><b>DESTINATARIO:</b> ${g.d_n}<br><b>Dir:</b> ${g.d_d} | <b>Tel:</b> ${g.d_t}<br><b>Loc:</b> <span class="resaltado">${g.d_l}</span></div>
                 </div>
-                <table class="tabla-print">
+                <table class="tabla-items" style="border: 1px solid #000;">
                     <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unitario</th><th>Valor Decl.</th></tr></thead>
                     <tbody>${itemsHTML}</tbody>
                 </table>
