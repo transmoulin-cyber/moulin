@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>SISTEMA MOULIN V7.1 - CONTROL SEGURO</title>
+    <title>SISTEMA MOULIN V7.2 - CONTROL TOTAL Y COBRANZA</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <script type="module">
@@ -32,9 +32,11 @@
         window.filtroEstado = 'todos';
         let proximoNumero = 1001;
 
+        // Carga de Guías con Filtro de Seguridad Bi-direccional
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
             const data = snapshot.val();
             window.historialGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
+            
             if (window.historialGlobal.length > 0) {
                 const todos = window.historialGlobal.map(g => parseInt(g.num.split('-')[1]) || 0);
                 proximoNumero = Math.max(...todos) + 1;
@@ -43,6 +45,7 @@
             renderHistorial();
         });
 
+        // Carga de Clientes
         onValue(ref(db, 'moulin/clientes'), (snapshot) => {
             window.clientesGlobal = snapshot.val() || {};
             const datalist = document.getElementById('lista_clientes');
@@ -72,20 +75,21 @@
             renderHistorial();
         };
 
-        // --- LÓGICA DE FILTRADO SEGURO (BI-DIRECCIONAL) ---
+        // RENDERIZADO CON SEGURIDAD Y FILTRO DE FECHA
         window.renderHistorial = function() {
             const b = document.getElementById('busq').value.toLowerCase();
+            const fDesde = document.getElementById('fecha_desde').value; // Formato YYYY-MM-DD
+            const fHasta = document.getElementById('fecha_hasta').value;
             const prefijoUser = sesion.prefijo.toUpperCase();
 
             const filtrados = window.historialGlobal.filter(g => {
-                // 1. Primero filtramos por seguridad (Origen o Destino)
+                // 1. Seguridad de Sucursal
                 let visible = false;
                 if (prefijoUser === "TODO" || prefijoUser === "ADM") {
-                    visible = true; // Admin ve todo
+                    visible = true;
                 } else {
                     const destino = (g.d_l || "").toUpperCase();
                     const origen = (g.o_l || "").toUpperCase();
-
                     if (prefijoUser === "STAFE") {
                         visible = destino.includes("SANTA FE") || destino.includes("STAFE") || origen.includes("SANTA FE") || origen.includes("STAFE");
                     } else if (prefijoUser === "ROS") {
@@ -97,23 +101,35 @@
                     }
                 }
 
-                // 2. Filtramos por la búsqueda del usuario
+                // 2. Filtro de Fechas (Convertimos DD/MM/YYYY a YYYY-MM-DD para comparar)
+                let cumpleFecha = true;
+                if (fDesde || fHasta) {
+                    const partes = g.fecha.split('/');
+                    const fechaGuiaStr = `${partes[2]}-${partes[1].padStart(2,'0')}-${partes[0].padStart(2,'0')}`;
+                    if (fDesde && fechaGuiaStr < fDesde) cumpleFecha = false;
+                    if (fHasta && fechaGuiaStr > fHasta) cumpleFecha = false;
+                }
+
+                // 3. Búsqueda y Estado
                 const coincideBusq = g.num.toLowerCase().includes(b) || (g.r_n && g.r_n.toLowerCase().includes(b)) || (g.d_n && g.d_n.toLowerCase().includes(b));
-                
-                // 3. Filtramos por el estado (Recibido, Depósito, etc)
                 const coincideEst = window.filtroEstado === 'todos' || g.estado === window.filtroEstado;
 
-                return visible && coincideBusq && coincideEst;
+                return visible && cumpleFecha && coincideBusq && coincideEst;
             });
 
-            document.getElementById('contador').innerText = `${filtrados.length} guías`;
+            document.getElementById('contador').innerText = `${filtrados.length} guías filtradas`;
+            window.datosActualesTabla = filtrados; // Guardamos para la descarga
+
             document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `
                 <tr>
                     <td><b>${g.num}</b></td>
-                    <td>${g.r_l} > ${g.d_l}</td>
-                    <td>$${g.total}</td>
+                    <td>${g.fecha}</td>
+                    <td>${g.o_l} > ${g.d_l}</td>
+                    <td>${g.r_n} > ${g.d_n}</td>
+                    <td>$${g.total} ${g.cr_activo==='S'?'<br><small style="color:red">CR: $'+g.cr_monto+'</small>':''}</td>
+                    <td><span style="font-size:9px">${g.pago_en}<br>${g.condicion}</span></td>
                     <td>
-                        <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px;">
+                        <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:10px;">
                             <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
                             <option value="deposito" ${g.estado==='deposito'?'selected':''}>Depósito</option>
                             <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado</option>
@@ -122,6 +138,22 @@
                     <td><button onclick="reimprimir('${g.num}')">🖨️</button></td>
                 </tr>
             `).join('');
+        };
+
+        // FUNCIÓN DESCARGA EXCEL (CSV)
+        window.descargarExcel = function() {
+            if (!window.datosActualesTabla || window.datosActualesTabla.length === 0) return alert("No hay datos en la tabla para bajar.");
+            
+            let csv = "\uFEFFNumero;Fecha;Origen;Destino;Remitente;Destinatario;Pago;Condicion;Total;Reembolso;Estado\n";
+            window.datosActualesTabla.forEach(g => {
+                csv += `${g.num};${g.fecha};${g.o_l};${g.d_l};${g.r_n};${g.d_n};${g.pago_en};${g.condicion};${g.total};${g.cr_monto || 0};${g.estado}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `MOULIN_REPORTE_${new Date().toLocaleDateString()}.csv`;
+            link.click();
         };
 
         window.confirmarYEmitir = function() {
@@ -133,7 +165,7 @@
                 fecha: new Date().toLocaleDateString(),
                 timestamp: idU,
                 r_n: document.getElementById('r_n').value, r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value,
-                o_l: document.getElementById('r_l').value, // Guardamos el origen explícitamente
+                o_l: document.getElementById('r_l').value, 
                 d_n: document.getElementById('d_n').value, d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value,
                 flete: d.flete.toFixed(2), seg: d.seg.toFixed(2), total: d.total.toFixed(2), v_decl: d.v_decl.toFixed(2),
                 pago_en: document.getElementById('pago_en').value, condicion: document.getElementById('condicion').value,
@@ -161,8 +193,10 @@
         input, select { width: 95%; padding: 6px; font-size: 12px; margin-bottom: 4px; border: 1px solid #ccc; border-radius: 3px; }
         .tabla-items { width: 100%; border-collapse: collapse; font-size: 12px; }
         .tabla-items th { background: var(--azul); color: white; padding: 6px; }
+        .tabla-items td { border-bottom: 1px solid #eee; padding: 5px; }
         .btn-imprimir { background: var(--verde); color: white; border: none; padding: 12px 35px; border-radius: 25px; font-size: 18px; font-weight: bold; cursor: pointer; }
         .btn-filtro { padding: 5px 10px; cursor: pointer; border: 1px solid #ccc; background: #eee; font-size: 11px; }
+        .btn-descargar { background: #2d3748; color: white; border: none; padding: 7px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px; }
         .active { background: var(--azul) !important; color: white !important; }
 
         @media print {
@@ -183,28 +217,28 @@
 
 <div class="hoja no-print">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid var(--azul); margin-bottom:10px;">
-        <h2 style="margin:0; color: var(--oscuro);">MOULIN CLOUD V7.1</h2>
+        <h2 style="margin:0; color: var(--oscuro);">MOULIN CLOUD V7.2</h2>
         <b id="display_guia" style="font-size:26px; color:var(--rojo)">...</b>
     </div>
 
     <div class="caja">
-        <b>REMITENTE (ORIGEN)</b>
+        <b>REMITENTE</b>
         <input type="text" id="r_n" list="lista_clientes" placeholder="Nombre" oninput="completarCliente('r')">
         <div class="grid-datos">
             <input type="text" id="r_t" placeholder="Tel">
             <input type="text" id="r_d" placeholder="Dirección">
-            <input type="text" id="r_l" placeholder="Localidad (Ej: Santa Fe)">
+            <input type="text" id="r_l" placeholder="Localidad">
             <input type="text" id="r_cbu" placeholder="CBU/Alias">
         </div>
     </div>
 
     <div class="caja">
-        <b>DESTINATARIO (DESTINO)</b>
+        <b>DESTINATARIO</b>
         <input type="text" id="d_n" list="lista_clientes" placeholder="Nombre" oninput="completarCliente('d')">
         <div class="grid-datos">
             <input type="text" id="d_t" placeholder="Tel">
             <input type="text" id="d_d" placeholder="Dirección">
-            <input type="text" id="d_l" placeholder="Localidad (Ej: Rosario)">
+            <input type="text" id="d_l" placeholder="Localidad">
             <input type="text" id="d_cbu" placeholder="CBU/Alias">
         </div>
     </div>
@@ -224,19 +258,37 @@
         </div>
     </div>
 
-    <div class="caja" style="max-height: 250px; overflow-y: auto;">
+    <div class="caja" style="max-height: 400px; overflow-y: auto;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:10px; background:#e2e8f0; padding:10px; border-radius:5px;">
+            <div>
+                <label style="font-size:10px; font-weight:bold;">BUSCAR:</label>
+                <input type="text" id="busq" placeholder="🔍 Nro, Remit, Dest..." oninput="renderHistorial()" style="margin:0;">
+            </div>
+            <div>
+                <label style="font-size:10px; font-weight:bold;">DESDE:</label>
+                <input type="date" id="fecha_desde" onchange="renderHistorial()" style="margin:0;">
+            </div>
+            <div>
+                <label style="font-size:10px; font-weight:bold;">HASTA:</label>
+                <input type="date" id="fecha_hasta" onchange="renderHistorial()" style="margin:0;">
+            </div>
+        </div>
+
         <div style="display:flex; gap:5px; margin-bottom:10px; align-items:center;">
-            <input type="text" id="busq" placeholder="🔍 Buscar..." oninput="renderHistorial()" style="width:150px; margin:0;">
             <button onclick="cambiarFiltro('todos', this)" class="btn-filtro active">Todos</button>
             <button onclick="cambiarFiltro('recibido', this)" class="btn-filtro">Recibidos</button>
             <button onclick="cambiarFiltro('deposito', this)" class="btn-filtro">Depósito</button>
             <button onclick="cambiarFiltro('entregado', this)" class="btn-filtro">Entregados</button>
-            <span id="contador" style="font-size:12px; font-weight:bold; margin-left:auto;"></span>
+            <button onclick="descargarExcel()" class="btn-descargar" style="margin-left:auto;">📥 BAJAR EXCEL</button>
         </div>
+        
         <table class="tabla-items">
-            <thead><tr style="background:var(--oscuro); color:white;"><th>Nro</th><th>Trayecto</th><th>Total</th><th>Estado</th><th>🖨️</th></tr></thead>
+            <thead><tr style="background:var(--oscuro); color:white;">
+                <th>Nro</th><th>Fecha</th><th>Trayecto</th><th>Cliente</th><th>Total</th><th>Pago</th><th>Estado</th><th>🖨️</th>
+            </tr></thead>
             <tbody id="listaHistorial"></tbody>
         </table>
+        <div id="contador" style="text-align:right; font-size:11px; margin-top:5px; font-weight:bold;"></div>
     </div>
 </div>
 
@@ -248,6 +300,7 @@
 <div id="seccion-impresion"></div>
 
 <script>
+    // Lógica de items e impresión intacta
     function agregarFila() {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo"><option>Bulto</option><option>Pallet</option><option>Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
@@ -282,8 +335,8 @@
                 </div>
                 ${g.cr_activo === 'S' ? `<div class="cr-box">⚠️ COBRAR CONTRA REEMBOLSO: $ ${g.cr_monto}</div>` : ''}
                 <div style="display:grid; grid-template-columns:1fr 1fr; border:2px solid #000; margin:10px 0; padding:12px; font-size:13px;">
-                    <div style="border-right:1px solid #000; padding-right:10px;"><b>REMITENTE:</b> ${g.r_n}<br><b>Dir:</b> ${g.r_d} | <b>Tel:</b> ${g.r_t}<br><b>Loc:</b> <span class="resaltado">${g.r_l}</span></div>
-                    <div style="padding-left:10px;"><b>DESTINATARIO:</b> ${g.d_n}<br><b>Dir:</b> ${g.d_d} | <b>Tel:</b> ${g.d_t}<br><b>Loc:</b> <span class="resaltado">${g.d_l}</span></div>
+                    <div style="border-right:1px solid #000; padding-right:10px;"><b>REMITENTE:</b> ${g.r_n}<br><b>Loc:</b> <span class="resaltado">${g.r_l}</span></div>
+                    <div style="padding-left:10px;"><b>DESTINATARIO:</b> ${g.d_n}<br><b>Loc:</b> <span class="resaltado">${g.d_l}</span></div>
                 </div>
                 <table class="tabla-items" style="border: 1px solid #000;">
                     <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unitario</th><th>Valor Decl.</th></tr></thead>
