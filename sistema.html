@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>SISTEMA MOULIN V7.2 - CONTROL TOTAL Y COBRANZA</title>
+    <title>SISTEMA MOULIN V7.3 - CONTROL RECON</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <script type="module">
@@ -24,7 +24,9 @@
         const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
         if (!sesion) { window.location.href = "index.html"; }
 
-        const PREFIJO = sesion.prefijo;
+        // AJUSTE DE PREFIJO: Si es ADM o TODO, ahora es RECON
+        const PREFIJO_BASE = sesion.prefijo;
+        const PREFIJO = (PREFIJO_BASE === "TODO" || PREFIJO_BASE === "ADM") ? "RECON" : PREFIJO_BASE;
         const NOMBRE = sesion.nombre;
 
         window.historialGlobal = [];
@@ -32,11 +34,9 @@
         window.filtroEstado = 'todos';
         let proximoNumero = 1001;
 
-        // Carga de Guías con Filtro de Seguridad Bi-direccional
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
             const data = snapshot.val();
             window.historialGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
-            
             if (window.historialGlobal.length > 0) {
                 const todos = window.historialGlobal.map(g => parseInt(g.num.split('-')[1]) || 0);
                 proximoNumero = Math.max(...todos) + 1;
@@ -45,7 +45,6 @@
             renderHistorial();
         });
 
-        // Carga de Clientes
         onValue(ref(db, 'moulin/clientes'), (snapshot) => {
             window.clientesGlobal = snapshot.val() || {};
             const datalist = document.getElementById('lista_clientes');
@@ -75,15 +74,13 @@
             renderHistorial();
         };
 
-        // RENDERIZADO CON SEGURIDAD Y FILTRO DE FECHA
         window.renderHistorial = function() {
             const b = document.getElementById('busq').value.toLowerCase();
-            const fDesde = document.getElementById('fecha_desde').value; // Formato YYYY-MM-DD
+            const fDesde = document.getElementById('fecha_desde').value;
             const fHasta = document.getElementById('fecha_hasta').value;
-            const prefijoUser = sesion.prefijo.toUpperCase();
+            const prefijoUser = PREFIJO_BASE.toUpperCase();
 
             const filtrados = window.historialGlobal.filter(g => {
-                // 1. Seguridad de Sucursal
                 let visible = false;
                 if (prefijoUser === "TODO" || prefijoUser === "ADM") {
                     visible = true;
@@ -94,14 +91,13 @@
                         visible = destino.includes("SANTA FE") || destino.includes("STAFE") || origen.includes("SANTA FE") || origen.includes("STAFE");
                     } else if (prefijoUser === "ROS") {
                         visible = destino.includes("ROSARIO") || destino.includes("ROS") || origen.includes("ROSARIO") || origen.includes("ROS");
-                    } else if (prefijoUser === "REC") {
+                    } else if (prefijoUser === "REC" || prefijoUser === "RECON") {
                         visible = destino.includes("RECONQUISTA") || destino.includes("REC") || origen.includes("RECONQUISTA") || origen.includes("REC");
                     } else {
                         visible = destino.includes(prefijoUser) || origen.includes(prefijoUser);
                     }
                 }
 
-                // 2. Filtro de Fechas (Convertimos DD/MM/YYYY a YYYY-MM-DD para comparar)
                 let cumpleFecha = true;
                 if (fDesde || fHasta) {
                     const partes = g.fecha.split('/');
@@ -110,7 +106,6 @@
                     if (fHasta && fechaGuiaStr > fHasta) cumpleFecha = false;
                 }
 
-                // 3. Búsqueda y Estado
                 const coincideBusq = g.num.toLowerCase().includes(b) || (g.r_n && g.r_n.toLowerCase().includes(b)) || (g.d_n && g.d_n.toLowerCase().includes(b));
                 const coincideEst = window.filtroEstado === 'todos' || g.estado === window.filtroEstado;
 
@@ -118,7 +113,7 @@
             });
 
             document.getElementById('contador').innerText = `${filtrados.length} guías filtradas`;
-            window.datosActualesTabla = filtrados; // Guardamos para la descarga
+            window.datosActualesTabla = filtrados;
 
             document.getElementById('listaHistorial').innerHTML = filtrados.map(g => `
                 <tr>
@@ -140,15 +135,12 @@
             `).join('');
         };
 
-        // FUNCIÓN DESCARGA EXCEL (CSV)
         window.descargarExcel = function() {
             if (!window.datosActualesTabla || window.datosActualesTabla.length === 0) return alert("No hay datos en la tabla para bajar.");
-            
             let csv = "\uFEFFNumero;Fecha;Origen;Destino;Remitente;Destinatario;Pago;Condicion;Total;Reembolso;Estado\n";
             window.datosActualesTabla.forEach(g => {
                 csv += `${g.num};${g.fecha};${g.o_l};${g.d_l};${g.r_n};${g.d_n};${g.pago_en};${g.condicion};${g.total};${g.cr_monto || 0};${g.estado}\n`;
             });
-
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
@@ -217,7 +209,7 @@
 
 <div class="hoja no-print">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid var(--azul); margin-bottom:10px;">
-        <h2 style="margin:0; color: var(--oscuro);">MOULIN CLOUD V7.2</h2>
+        <h2 style="margin:0; color: var(--oscuro);">MOULIN CLOUD V7.3</h2>
         <b id="display_guia" style="font-size:26px; color:var(--rojo)">...</b>
     </div>
 
@@ -266,11 +258,11 @@
             </div>
             <div>
                 <label style="font-size:10px; font-weight:bold;">DESDE:</label>
-                <input type="date" id="fecha_desde" onchange="renderHistorial()" style="margin:0;">
+                <input type="date" id="fecha_desde" oninput="renderHistorial()" style="margin:0;">
             </div>
             <div>
                 <label style="font-size:10px; font-weight:bold;">HASTA:</label>
-                <input type="date" id="fecha_hasta" onchange="renderHistorial()" style="margin:0;">
+                <input type="date" id="fecha_hasta" oninput="renderHistorial()" style="margin:0;">
             </div>
         </div>
 
@@ -300,7 +292,6 @@
 <div id="seccion-impresion"></div>
 
 <script>
-    // Lógica de items e impresión intacta
     function agregarFila() {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo"><option>Bulto</option><option>Pallet</option><option>Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
