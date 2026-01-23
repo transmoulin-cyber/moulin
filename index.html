@@ -62,30 +62,31 @@
 </div>
 
 <script>
-   const usuarios = [
-    { u: "admin", p: "moulin2024", nombre: "Administración", prefijo: "RECON" }, // El admin ve todo
-    { u: "rosario", p: "moulinros", nombre: "Chofer Rosario", prefijo: "ROS" },
-    { u: "santafe", p: "moulinsfe", nombre: "Chofer Santa Fe", prefijo: "STAFE" }
-    { u: "BSAS", p: "moulinsfe", nombre: "Chofer BSAS", prefijo: "BSAS" }   
-];
+    // LISTA DE USUARIOS ACTUALIZADA
+    const usuarios = [
+        { u: "admin", p: "moulin2024", nombre: "Administración", prefijo: "TODO" }, 
+        { u: "rosario", p: "moulinros", nombre: "Chofer Rosario", prefijo: "ROS" },
+        { u: "santafe", p: "moulinsfe", nombre: "Chofer Santa Fe", prefijo: "STAFE" },
+        { u: "recon", p: "moulinrec", nombre: "Chofer Reconquista", prefijo: "REC" },
+        { u: "bsas", p: "moulinbsas", nombre: "Chofer BSAS", prefijo: "BSAS" }
+    ];
 
     function intentarIngreso() {
-        const uInput = document.getElementById('user').value;
+        const uInput = document.getElementById('user').value.toLowerCase();
         const pInput = document.getElementById('pass').value;
         const error = document.getElementById('errorMsg');
 
         const encontrado = usuarios.find(x => x.u === uInput && x.p === pInput);
 
         if (encontrado) {
+            // Guardamos la sesión con el prefijo incluido
             sessionStorage.setItem('moulin_sesion', JSON.stringify(encontrado));
 
             const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
             if (esMovil) {
-                // Abre el archivo movil.html
                 window.location.href = "movil.html";
             } else {
-                // CORRECCIÓN: Ahora busca sistema.html en lugar de escritorio.html
                 window.location.href = "sistema.html";
             }
         } else {
@@ -97,3 +98,6 @@
         if(e.key === 'Enter') intentarIngreso();
     });
 </script>
+
+</body>
+</html>
