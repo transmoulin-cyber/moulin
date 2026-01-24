@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>SISTEMA MOULIN V8.1 - IMPRESIÓN TRIPLE</title>
+    <title>SISTEMA MOULIN V8.3 - CON LOGO</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
@@ -163,9 +163,12 @@
         @media print { 
             .no-print { display: none !important; } 
             #seccion-impresion { display: block !important; } 
-            .cupon { height: 11cm; border: 1px solid #000; padding: 10px; display: flex; flex-direction: column; page-break-after: avoid; overflow: hidden; font-size: 11px; margin-bottom: 0.2cm; }
-            .etiqueta { height: 5cm; border: 2px dashed #000; padding: 10px; display: flex; align-items: center; justify-content: space-between; page-break-after: always; }
-            .resaltado { background: #eee !important; font-weight: bold; padding: 0 4px; } 
+            .cupon { height: 11cm; border: 1px solid #000; padding: 12px; display: flex; flex-direction: column; page-break-after: avoid; overflow: hidden; font-size: 13px; margin-bottom: 0.3cm; line-height: 1.3; }
+            .etiqueta { height: 4cm; border: 2px dashed #000; padding: 8px; display: flex; align-items: center; justify-content: space-between; page-break-after: always; font-size: 13px; }
+            .resaltado { background: #eee !important; font-weight: bold; padding: 0 4px; border: 1px solid #ccc; } 
+            .tabla-items-print { width: 100%; border-collapse: collapse; font-size: 12px; margin: 5px 0; }
+            .tabla-items-print th, .tabla-items-print td { border: 1px solid #000; padding: 4px; }
+            .logo-print { height: 45px; width: auto; }
         }
         #seccion-impresion { display: none; }
     </style>
@@ -174,7 +177,8 @@
 <datalist id="lista_clientes"></datalist>
 <div class="hoja no-print">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid var(--azul); margin-bottom:15px;">
-        <h2 style="margin:0;">SISTEMA MOULIN V8.1</h2>
+        <img src="https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png" style="height:50px;">
+        <h2 style="margin:0;">SISTEMA MOULIN V8.3</h2>
         <b id="display_guia" style="font-size:28px; color:red;">---</b>
     </div>
 
@@ -248,50 +252,51 @@
     function imprimir(g) {
         let itemsH = g.items.map(i => `<tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d}</td><td align="right">$${i.u}</td><td align="right">$${i.vd}</td></tr>`).join('');
         let html = "";
+        const logoURL = "https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png";
         
-        // 1. ORIGINAL Y DUPLICADO (11cm cada uno)
         ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit, idx) => {
             html += `<div class="cupon">
-                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #000; padding-bottom:3px;">
-                    <div><b style="font-size:14px;">TRANSPORTE MOULIN</b><br><small>CUIT: 30-71234567-8</small></div>
-                    <div style="text-align:right"><small>${tit}</small><br><b style="font-size:18px; color:red;">${g.num}</b><br><b>${g.fecha}</b></div>
+                <div style="display:flex; justify-content:space-between; border-bottom:2px solid #000; padding-bottom:5px;">
+                    <img src="${logoURL}" class="logo-print">
+                    <div style="text-align:right"><small>${tit}</small><br><b style="font-size:22px; color:red;">${g.num}</b><br><b>${g.fecha}</b></div>
                 </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:3px 0; padding:5px;">
-                    <div style="border-right:1px solid #000; padding-right:5px;">
-                        <b>REMITENTE:</b> ${g.r_n}<br>
+                <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:8px 0; padding:8px; line-height:1.4;">
+                    <div style="border-right:1px solid #000; padding-right:8px;">
+                        <b style="font-size:14px;">REMITENTE:</b> ${g.r_n}<br>
+                        Dir: ${g.r_d}<br>
                         Tel: ${g.r_t} | CBU: ${g.r_cbu}<br>
                         Loc: <span class="resaltado">${g.r_l}</span>
                     </div>
-                    <div style="padding-left:5px;">
-                        <b>DESTINATARIO:</b> ${g.d_n}<br>
+                    <div style="padding-left:8px;">
+                        <b style="font-size:14px;">DESTINATARIO:</b> ${g.d_n}<br>
+                        Dir: ${g.d_d}<br>
                         Tel: ${g.d_t} | CBU: ${g.d_cbu}<br>
                         Loc: <span class="resaltado">${g.d_l}</span>
                     </div>
                 </div>
-                <table class="tabla-items" style="border:1px solid #000;">
+                <table class="tabla-items-print">
                     <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th><th>V.Decl</th></tr></thead>
                     <tbody>${itemsH}</tbody>
                 </table>
-                <div style="display:flex; justify-content:space-between; margin-top:5px; font-weight:bold;">
+                <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold; font-size:14px;">
                     <div>BULTOS: ${g.cant_t} | Cond: ${g.condicion}</div>
-                    <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | <span style="font-size:15px;">TOTAL: $${g.total}</span></div>
+                    <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | <span style="font-size:18px;">TOTAL: $${g.total}</span></div>
                 </div>
-                <div style="margin-top:auto; text-align:right;"><div style="border-top:1px solid #000; width:150px; text-align:center; margin-left:auto; font-size:10px;">Firma Receptor</div></div>
+                <div style="margin-top:auto; text-align:right;"><div style="border-top:1px solid #000; width:200px; text-align:center; margin-left:auto; font-size:11px;">Firma y Aclaración Receptor</div></div>
             </div>`;
         });
 
-        // 2. TERCER CUPÓN: ETIQUETA LOGÍSTICA (5cm)
         html += `<div class="etiqueta">
-            <div style="width:35%; line-height:1.2;">
+            <div style="width:38%; line-height:1.2;">
                 <small>DESTINO:</small><br>
-                <b style="font-size:14px;">${g.d_n}</b><br>
+                <b style="font-size:16px;">${g.d_n}</b><br>
                 <span>${g.d_d}</span><br>
-                <b class="resaltado" style="font-size:14px;">${g.d_l}</b>
+                <b class="resaltado" style="font-size:16px;">${g.d_l}</b>
             </div>
-            <div id="qr_etiqueta" style="width:80px; height:80px; background:#eee;"></div>
-            <div style="width:35%; text-align:right; line-height:1.2;">
+            <div id="qr_etiqueta" style="width:80px; height:80px; display:flex; justify-content:center;"></div>
+            <div style="width:38%; text-align:right; line-height:1.2;">
                 <small>REMITENTE:</small><br>
-                <b>${g.r_n}</b><br>
+                <b style="font-size:14px;">${g.r_n}</b><br>
                 <b class="resaltado">${g.r_l}</b><br>
                 <small>GUIA: ${g.num}</small>
             </div>
