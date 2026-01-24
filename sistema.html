@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>SISTEMA MOULIN V8.4 - LOGO CORREGIDO</title>
+    <title>SISTEMA MOULIN V8.5 - ETIQUETA COMPLETA</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
@@ -164,7 +164,7 @@
             .no-print { display: none !important; } 
             #seccion-impresion { display: block !important; } 
             .cupon { height: 11cm; border: 1px solid #000; padding: 12px; display: flex; flex-direction: column; page-break-after: avoid; overflow: hidden; font-size: 13px; margin-bottom: 0.3cm; line-height: 1.3; }
-            .etiqueta { height: 4cm; border: 2px dashed #000; padding: 8px; display: flex; align-items: center; justify-content: space-between; page-break-after: always; font-size: 13px; }
+            .etiqueta { height: 4cm; border: 2px dashed #000; padding: 8px; display: flex; align-items: center; justify-content: space-between; page-break-after: always; font-size: 13px; position: relative; }
             .resaltado { background: #eee !important; font-weight: bold; padding: 0 4px; border: 1px solid #ccc; } 
             .tabla-items-print { width: 100%; border-collapse: collapse; font-size: 12px; margin: 5px 0; }
             .tabla-items-print th, .tabla-items-print td { border: 1px solid #000; padding: 4px; }
@@ -180,7 +180,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid var(--azul); margin-bottom:15px;">
         <div style="display:flex; align-items:center;">
             <img src="logo.png" style="height:50px; margin-right:10px;" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
-            <h2 style="margin:0;">TRANSPORTE MOULIN V8.4</h2>
+            <h2 style="margin:0;">TRANSPORTE MOULIN V8.5</h2>
         </div>
         <b id="display_guia" style="font-size:28px; color:red;">---</b>
     </div>
@@ -255,7 +255,6 @@
     function imprimir(g) {
         let itemsH = g.items.map(i => `<tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d}</td><td align="right">$${i.u}</td><td align="right">$${i.vd}</td></tr>`).join('');
         let html = "";
-        // Ruta del logo relativa al mismo folder de GitHub
         const logoPath = "logo.png";
         
         ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit, idx) => {
@@ -292,24 +291,29 @@
         });
 
         html += `<div class="etiqueta">
-            <div style="width:38%; line-height:1.2;">
+            <div style="width:33%; line-height:1.1;">
                 <small>DESTINO:</small><br>
-                <b style="font-size:16px;">${g.d_n}</b><br>
-                <span>${g.d_d}</span><br>
-                <b class="resaltado" style="font-size:16px;">${g.d_l}</b>
+                <b style="font-size:15px;">${g.d_n}</b><br>
+                <span style="font-size:12px;">${g.d_d}</span><br>
+                <b class="resaltado" style="font-size:15px;">${g.d_l}</b>
             </div>
-            <div id="qr_etiqueta" style="width:80px; height:80px; display:flex; justify-content:center;"></div>
-            <div style="width:38%; text-align:right; line-height:1.2;">
-                <small>REMITENTE:</small><br>
-                <b style="font-size:14px;">${g.r_n}</b><br>
+            <div style="width:33%; display:flex; flex-direction:column; align-items:center;">
+                <div id="qr_etiqueta" style="width:70px; height:70px;"></div>
+                <b style="font-size:14px; margin-top:3px;">${g.num}</b>
+            </div>
+            <div style="width:33%; text-align:right; line-height:1.1;">
+                <small>ORIGEN:</small><br>
+                <b style="font-size:13px;">${g.r_n}</b><br>
                 <b class="resaltado">${g.r_l}</b><br>
-                <small>GUIA: ${g.num}</small>
+                <div style="margin-top:5px; border:1px solid #000; display:inline-block; padding:2px 5px; background:#000; color:#fff;">
+                    BULTOS: ${g.cant_t}
+                </div>
             </div>
         </div>`;
 
         document.getElementById('seccion-impresion').innerHTML = html;
         setTimeout(() => {
-            new QRCode(document.getElementById("qr_etiqueta"), { text: g.num, width: 80, height: 80 });
+            new QRCode(document.getElementById("qr_etiqueta"), { text: g.num, width: 70, height: 70 });
             window.print();
         }, 300);
     }
