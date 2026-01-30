@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>MOULIN V8.7 SISTEMA INTEGRAL</title>
+    <title>MOULIN V8.7 FULL - TRES HOJAS</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
@@ -27,7 +27,8 @@
 
         const PREFIJO_BASE = sesion.prefijo;
         const PREFIJO = (["TODO","ADM","REC"].includes(PREFIJO_BASE)) ? "RECON" : PREFIJO_BASE;
-        
+        const NOMBRE_OP = sesion.nombre;
+
         window.historialGlobal = [];
         window.clientesGlobal = {}; 
         window.retirosGlobal = [];
@@ -68,55 +69,92 @@
             document.getElementById('lista_clientes').innerHTML = Object.keys(window.clientesGlobal).map(c => `<option value="${c}">`).join('');
         });
 
-        // --- FILTROS Y EXCEL ---
-        window.renderHistorial = () => {
-            const busq = document.getElementById('busq').value.toLowerCase();
-            const fDesde = document.getElementById('f_desde').value;
-            const fHasta = document.getElementById('f_hasta').value;
-            const locFiltro = document.getElementById('f_loc').value.toLowerCase();
-
-            const filtrados = window.historialGlobal.filter(g => {
-                const matchBusq = g.num.toLowerCase().includes(busq) || g.r_n.toLowerCase().includes(busq) || g.d_n.toLowerCase().includes(busq);
-                const matchLoc = !locFiltro || g.r_l.toLowerCase().includes(locFiltro) || g.d_l.toLowerCase().includes(locFiltro);
-                
-                // Conversión de fecha DD/MM/YYYY a YYYY-MM-DD para comparar
-                const [d, m, y] = g.fecha.split('/');
-                const fechaGuia = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-                const matchFecha = (!fDesde || fechaGuia >= fDesde) && (!fHasta || fechaGuia <= fHasta);
-                
-                let acceso = (PREFIJO_BASE === "ADM" || PREFIJO_BASE === "TODO") || (g.num.startsWith(PREFIJO));
-                
-                return matchBusq && matchLoc && matchFecha && acceso;
+        // --- FUNCION DE IMPRESIÓN FULL (3 HOJAS) ---
+        window.ejecutarImpresion = (g) => {
+            const seccion = document.getElementById('seccion-impresion');
+            let bultosHtml = "";
+            let totalBultos = 0;
+            
+            g.items.forEach(item => {
+                totalBultos += parseInt(item.cant);
             });
 
-            document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map(g => `
-                <tr>
-                    <td><b>${g.num}</b></td>
-                    <td>${g.fecha}</td>
-                    <td>${g.r_n} <br><small>${g.r_l}</small></td>
-                    <td>${g.d_n} <br><small>${g.d_l}</small></td>
-                    <td>$${g.total}</td>
-                    <td><button onclick="reimprimir('${g.num}')">🖨️</button></td>
-                </tr>
-            `).join('');
-            
-            window.datosParaExcel = filtrados; // Guardamos para la descarga
+            // Creamos las etiquetas para las cajas (Hoja 3)
+            let etiquetasHtml = "";
+            for(let i=1; i<=totalBultos; i++) {
+                etiquetasHtml += `
+                    <div class="etiqueta-caja">
+                        <div style="font-size:20px; font-weight:bold; border-bottom:2px solid #000;">MOULIN - GUÍA: ${g.num}</div>
+                        <div style="padding:10px;">
+                            <div style="font-size:16px;"><b>DESTINO:</b> ${g.d_l}</div>
+                            <div style="font-size:18px;"><b>PARA:</b> ${g.d_n}</div>
+                            <div style="text-align:right; font-size:22px; margin-top:10px;">Bulto: ${i} de ${totalBultos}</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const contenido = `
+                <div class="hoja-impresion">
+                    <center><h2>MOULIN - COPIA REMITENTE</h2></center>
+                    <table class="tabla-imp">
+                        <tr><td><b>GUÍA:</b> ${g.num}</td><td><b>FECHA:</b> ${g.fecha}</td></tr>
+                        <tr><td colspan="2"><b>ORIGEN:</b> ${g.r_n} (${g.r_l})</td></tr>
+                        <tr><td colspan="2"><b>DESTINO:</b> ${g.d_n} (${g.d_l})</td></tr>
+                        <tr><td><b>PAGO EN:</b> ${g.pago_en}</td><td><b>TOTAL:</b> $${g.total}</td></tr>
+                    </table>
+                </div>
+                <div class="page-break"></div>
+                <div class="hoja-impresion">
+                    <center><h2>MOULIN - COPIA DESTINATARIO</h2></center>
+                    <table class="tabla-imp">
+                        <tr><td><b>GUÍA:</b> ${g.num}</td><td><b>OP:</b> ${g.operador}</td></tr>
+                        <tr><td colspan="2"><b>ENTREGAR A:</b> ${g.d_n}<br>DIR: ${g.d_d} (${g.d_l})</td></tr>
+                        <tr><td colspan="2"><b>CONTRAREEMBOLSO:</b> $${g.cr_monto}</td></tr>
+                    </table>
+                </div>
+                <div class="page-break"></div>
+                <div class="hoja-impresion">
+                    <center><h2>ETIQUETAS DE BULTOS</h2></center>
+                    ${etiquetasHtml}
+                </div>
+            `;
+            seccion.innerHTML = contenido;
+            window.print();
         };
 
-        window.descargarExcel = () => {
-            if(!window.datosParaExcel || window.datosParaExcel.length === 0) return alert("No hay datos para exportar");
-            const data = window.datosParaExcel.map(g => ({
-                Guia: g.num, Fecha: g.fecha, Remitente: g.r_n, Loc_Rem: g.r_l, 
-                Destinatario: g.d_n, Loc_Dest: g.d_l, Total: g.total, Pago: g.pago_en,
-                CR: g.cr_monto || 0
-            }));
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Guias");
-            XLSX.writeFile(wb, `Planilla_Moulin_${new Date().toLocaleDateString()}.xlsx`);
+        window.confirmarYEmitir = async () => {
+            const r_n = document.getElementById('r_n').value;
+            const d_n = document.getElementById('d_n').value;
+            if(!r_n || !d_n) return alert("Complete los datos.");
+
+            const totales = calcularTotales();
+            const nuevaGuia = {
+                num: `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`,
+                fecha: new Date().toLocaleDateString(),
+                operador: NOMBRE_OP,
+                r_n: r_n, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value, r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value,
+                d_n: d_n, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value, d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value,
+                items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(tr => ({
+                    cant: tr.querySelector('.i-cant').value,
+                    tipo: tr.querySelector('.i-tipo').value,
+                    det: tr.querySelector('.i-det').value,
+                    unit: tr.querySelector('.i-unit').value,
+                    vdecl: tr.querySelector('.i-decl').value
+                })),
+                pago_en: document.getElementById('pago_en').value,
+                condicion: document.getElementById('condicion').value,
+                total: totales.total.toFixed(2),
+                cr_monto: document.getElementById('cr_monto').value || 0,
+                estado: 'recibido'
+            };
+
+            await set(ref(db, 'moulin/guias/' + Date.now()), nuevaGuia);
+            ejecutarImpresion(nuevaGuia);
+            location.reload();
         };
 
-        // --- FUNCIONES DE RETIRO (Mismo bloque anterior) ---
+        // --- RETIROS ---
         window.solicitarRetiro = () => {
             const r = {
                 r_lugar: document.getElementById('ret_lug').value, r_dir: document.getElementById('ret_dir').value, r_loc: document.getElementById('ret_loc').value, r_cont: document.getElementById('ret_cont').value,
@@ -124,8 +162,8 @@
                 obs: document.getElementById('ret_obs').value, pago: document.getElementById('ret_pago').value, cr: document.getElementById('ret_cr_monto').value,
                 fecha: new Date().toLocaleString(), estado: 'pendiente', sucursal_retiro: PREFIJO
             };
-            if(!r.r_lugar || !r.s_nom) return alert("Faltan datos obligatorios.");
-            push(ref(db, 'moulin/retiros'), r).then(() => { alert("Retiro agendado"); document.querySelectorAll('.input-ret').forEach(i => i.value = ""); });
+            if(!r.r_lugar || !r.s_nom) return alert("Faltan datos.");
+            push(ref(db, 'moulin/retiros'), r).then(() => { alert("Agendado"); location.reload(); });
         };
 
         window.renderRetiros = () => {
@@ -133,8 +171,8 @@
             const misRetiros = window.retirosGlobal.filter(r => r.estado === 'pendiente' && (PREFIJO_BASE === "TODO" || r.sucursal_retiro === PREFIJO));
             lista.innerHTML = misRetiros.reverse().map(r => `
                 <div class="card-retiro">
-                    <div style="flex:1"><b>RETIRAR EN:</b> ${r.r_lugar} (${r.r_loc})<br><b>SOLICITA:</b> ${r.s_nom}</div>
-                    <button class="btn-traer" onclick="convertirAGuia('${r.id}')">📦 Procesar</button>
+                    <div style="flex:1"><b>LUGAR:</b> ${r.r_lugar} (${r.r_loc})<br><b>SOLICITA:</b> ${r.s_nom}</div>
+                    <button class="btn-traer" onclick="convertirAGuia('${r.id}')">PROCESAR</button>
                 </div>
             `).join('');
         };
@@ -148,29 +186,34 @@
             cambiarTab('tab-guia');
             update(ref(db, `moulin/retiros/${id}`), { estado: 'en_guia' });
         };
-
     </script>
 
     <style>
         :root { --azul: #1a4a7a; --oscuro: #102a43; --verde: #38a169; --rojo: #e53e3e; }
-        body { font-family: sans-serif; background: #f0f4f8; margin: 0; padding-bottom: 110px; font-size: 13px; }
-        .nav-tabs { background: var(--oscuro); padding: 10px; display: flex; justify-content: center; gap: 15px; position: sticky; top:0; z-index: 1000; }
-        .nav-tabs button { padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; background: #243b55; color: white; font-weight: bold; position: relative; }
+        body { font-family: sans-serif; background: #f0f4f8; margin: 0; padding-bottom: 120px; }
+        .nav-tabs { background: var(--oscuro); padding: 12px; display: flex; justify-content: center; gap: 20px; position: sticky; top:0; z-index: 1000; }
+        .nav-tabs button { padding: 12px 30px; border: none; border-radius: 8px; cursor: pointer; background: #243b55; color: white; font-weight: bold; position: relative; }
         .nav-tabs button.active { background: #3182ce; }
-        .badge { background: var(--rojo); color: white; border-radius: 50%; padding: 2px 7px; font-size: 11px; position: absolute; top: -5px; right: -5px; border: 2px solid var(--oscuro); }
-        .tab-content { display: none; padding: 15px; }
-        .tab-content.active { display: block; }
-        .hoja { background: white; max-width: 1000px; margin: auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .caja { background: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px; border-radius: 6px; }
-        input, select, textarea { width: 100%; padding: 6px; margin-bottom: 5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 12px; }
-        .grid-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; background: #edf2f7; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
-        .tabla-items { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 11px; }
-        .tabla-items th { background: var(--azul); color: white; padding: 8px; text-align: left; }
-        .tabla-items td { border-bottom: 1px solid #eee; padding: 8px; }
-        .card-retiro { background: white; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; border-left: 5px solid #f6ad55; }
-        .btn-traer { background: var(--azul); color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-left: auto; }
+        .badge { background: var(--rojo); color: white; border-radius: 50%; padding: 3px 8px; font-size: 11px; position: absolute; top: -8px; right: -8px; border: 2px solid var(--oscuro); }
+        .hoja { background: white; max-width: 900px; margin: auto; padding: 25px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .caja { background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; margin-bottom: 15px; border-radius: 8px; }
+        input, select, textarea { width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #cbd5e1; border-radius: 5px; }
+        .card-retiro { background: white; border: 1px solid #e2e8f0; padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; align-items: center; border-left: 6px solid #f6ad55; }
+        .btn-traer { background: var(--azul); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-left: auto; }
+        
+        /* IMPRESION */
+        .no-print { display: block; }
+        @media print { 
+            .no-print { display: none !important; } 
+            #seccion-impresion { display: block !important; } 
+            .page-break { page-break-after: always; }
+        }
+        #seccion-impresion { display: none; }
+        .tabla-imp { width: 100%; border-collapse: collapse; margin-top: 10px; border: 1px solid #000; }
+        .tabla-imp td { border: 1px solid #000; padding: 8px; font-size: 14px; }
+        .etiqueta-caja { width: 100%; border: 3px solid #000; margin-bottom: 20px; padding: 10px; border-radius: 10px; }
         .parpadeo { animation: blink 2s infinite; }
-        @keyframes blink { 0%, 100% { box-shadow: 0 0 0px transparent; } 50% { box-shadow: 0 0 10px var(--rojo); } }
+        @keyframes blink { 0%, 100% { box-shadow: 0 0 0px transparent; } 50% { box-shadow: 0 0 15px var(--rojo); } }
     </style>
 </head>
 <body>
@@ -182,69 +225,59 @@
     <button id="btn-retiros" onclick="cambiarTab('tab-retiros')">📝 RETIROS <span id="badge-retiros" class="badge" style="display:none">0</span></button>
 </div>
 
-<div id="tab-guia" class="tab-content active">
+<div id="tab-guia" class="tab-content active no-print">
     <div class="hoja">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <h2 style="margin:0; color:var(--azul);">MOULIN V8.7</h2>
-            <b id="display_guia" style="font-size:24px; color:red;">---</b>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>MOULIN V8.7</h2>
+            <b id="display_guia" style="font-size:26px; color:red;">---</b>
         </div>
-
         <div class="caja">
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                <div><b>REMITENTE</b><input type="text" id="r_n" list="lista_clientes" oninput="completarCliente('r')" placeholder="Nombre"><input type="text" id="r_d" placeholder="Dirección"><input type="text" id="r_l" placeholder="Localidad"><input type="text" id="r_t" placeholder="Teléfono"><input type="text" id="r_cbu" placeholder="CBU"></div>
-                <div><b>DESTINATARIO</b><input type="text" id="d_n" list="lista_clientes" oninput="completarCliente('d')" placeholder="Nombre"><input type="text" id="d_d" placeholder="Dirección"><input type="text" id="d_l" placeholder="Localidad"><input type="text" id="d_t" placeholder="Teléfono"><input type="text" id="d_cbu" placeholder="CBU"></div>
+                <div><b>REMITENTE</b><input type="text" id="r_n" list="lista_clientes" oninput="completarCliente('r')"><input type="text" id="r_d"><input type="text" id="r_l"><input type="text" id="r_t"><input type="text" id="r_cbu" placeholder="CBU"></div>
+                <div><b>DESTINATARIO</b><input type="text" id="d_n" list="lista_clientes" oninput="completarCliente('d')"><input type="text" id="d_d"><input type="text" id="d_l"><input type="text" id="d_t"><input type="text" id="d_cbu" placeholder="CBU"></div>
             </div>
         </div>
-
         <div class="caja">
-            <table class="tabla-items"><thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>$ Unit</th><th>$ V.D</th><th></th></tr></thead><tbody id="cuerpoItems"></tbody></table>
-            <button onclick="agregarFila()" style="margin-top:5px;">+ Agregar Fila</button>
+            <table style="width:100%; border-collapse:collapse;"><thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>$ Unit</th><th>$ V.Decl</th><th></th></tr></thead><tbody id="cuerpoItems"></tbody></table>
+            <button onclick="agregarFila()">+ Agregar Bulto</button>
         </div>
-
-        <div style="margin-top:30px;">
-            <h4 style="margin-bottom:10px; border-bottom: 2px solid var(--azul);">HISTORIAL Y PLANILLA</h4>
-            <div class="grid-filtros">
-                <input type="date" id="f_desde" onchange="renderHistorial()">
-                <input type="date" id="f_hasta" onchange="renderHistorial()">
-                <input type="text" id="f_loc" placeholder="Filtrar Localidad" oninput="renderHistorial()">
-                <input type="text" id="busq" placeholder="Buscar Cliente/Guía" oninput="renderHistorial()">
-                <button onclick="descargarExcel()" style="background:#2d3748; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">📊 Descargar Excel</button>
-            </div>
-            <table class="tabla-items">
-                <thead><tr><th>Guía</th><th>Fecha</th><th>Remitente</th><th>Destinatario</th><th>Total</th><th>Acción</th></tr></thead>
-                <tbody id="listaHistorial"></tbody>
-            </table>
+        <div class="caja" style="display:flex; gap:10px; align-items:center;">
+            <select id="pago_en"><option>PAGO EN ORIGEN</option><option>PAGO EN DESTINO</option></select>
+            <select id="condicion"><option>CONTADO</option><option>CTA CTE</option></select>
+            <input type="number" id="p_seg" value="0.8" style="width:60px;">%
+            <input type="number" id="cr_monto" placeholder="Monto CR" style="width:100px;">
         </div>
+        <div class="caja">
+            <input type="date" id="f_desde" onchange="renderHistorial()">
+            <input type="date" id="f_hasta" onchange="renderHistorial()">
+            <input type="text" id="busq" placeholder="Buscar..." oninput="renderHistorial()">
+            <button onclick="descargarExcel()">📊 Descargar Planilla</button>
+        </div>
+        <table style="width:100%; font-size:12px;"><thead><tr><th>Guía</th><th>Fecha</th><th>Ruta</th><th>Total</th><th></th></tr></thead><tbody id="listaHistorial"></tbody></table>
     </div>
 </div>
 
-<div id="tab-retiros" class="tab-content">
+<div id="tab-retiros" class="tab-content no-print">
     <div class="hoja">
-        <h3 style="margin-top:0;">NUEVA SOLICITUD DE RETIRO</h3>
+        <h3>PEDIR RETIRO</h3>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-            <div class="caja"><b>PUNTO DE RETIRO</b><input type="text" id="ret_lug" class="input-ret" placeholder="Lugar"><input type="text" id="ret_dir" class="input-ret" placeholder="Dirección"><input type="text" id="ret_loc" class="input-ret" placeholder="Localidad"><input type="text" id="ret_cont" class="input-ret" placeholder="Contacto"></div>
-            <div class="caja"><b>SOLICITANTE (DESTINO)</b><input type="text" id="sol_nom" class="input-ret" placeholder="Cliente"><input type="text" id="sol_dir" class="input-ret" placeholder="Dir Entrega"><input type="text" id="sol_loc" class="input-ret" placeholder="Loc Destino"><input type="text" id="sol_tel" class="input-ret" placeholder="Teléfono"></div>
+            <div class="caja"><b>PUNTO RETIRO</b><input type="text" id="ret_lug"><input type="text" id="ret_dir"><input type="text" id="ret_loc"><input type="text" id="ret_cont"></div>
+            <div class="caja"><b>ENTREGAR A</b><input type="text" id="sol_nom"><input type="text" id="sol_dir"><input type="text" id="sol_loc"><input type="text" id="sol_tel"></div>
         </div>
-        <div class="caja">
-            <textarea id="ret_obs" class="input-ret" placeholder="Detalles del paquete..."></textarea>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                <select id="ret_pago" class="input-ret"><option>PAGO EN ORIGEN</option><option>PAGO EN DESTINO</option><option>CTA CTE</option></select>
-                <input type="number" id="ret_cr_monto" class="input-ret" placeholder="$ Contra Reembolso">
-            </div>
-            <button onclick="solicitarRetiro()" style="background:var(--verde); color:white; padding:15px; width:100%; font-weight:bold; margin-top:10px; border:none; border-radius:8px; cursor:pointer;">AGENDAR RETIRO</button>
-        </div>
-        <h4>RETIROS PENDIENTES</h4>
-        <div id="listaRetiros"></div>
+        <textarea id="ret_obs" placeholder="Observaciones..."></textarea>
+        <button onclick="solicitarRetiro()" style="background:var(--verde); color:white; padding:15px; width:100%; font-weight:bold; cursor:pointer;">AGENDAR RETIRO</button>
+        <h4>PENDIENTES</h4><div id="listaRetiros"></div>
     </div>
 </div>
 
-<div class="no-print" style="position:fixed; bottom:0; width:100%; background:var(--oscuro); padding:15px; display:flex; justify-content:space-around; align-items:center; color:white; z-index:1000;">
-    <div id="total_txt" style="font-size:18px; font-weight:bold; color:#48bb78;">TOTAL: $ 0.00</div>
-    <button onclick="confirmarYEmitir()" style="background:var(--verde); color:white; padding:12px 50px; border-radius:30px; font-weight:bold; border:none; cursor:pointer; font-size:16px;">GRABAR E IMPRIMIR</button>
+<div class="no-print" style="position:fixed; bottom:0; width:100%; background:var(--oscuro); padding:20px; display:flex; justify-content:space-around; align-items:center; color:white; z-index:1001;">
+    <div id="total_txt" style="font-size:20px; font-weight:bold;">TOTAL: $ 0.00</div>
+    <button onclick="confirmarYEmitir()" style="background:var(--verde); color:white; padding:12px 50px; border-radius:30px; font-weight:bold; border:none; cursor:pointer; font-size:18px;">GRABAR E IMPRIMIR</button>
 </div>
+
+<div id="seccion-impresion"></div>
 
 <script>
-    // Se mantienen todas las funciones de lógica de bultos y tabs
     function cambiarTab(id) {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
@@ -253,7 +286,7 @@
     }
     function agregarFila() {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo"><option>Bulto</option><option>Pallet</option><option>Sobre</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales()">✕</button></td>`;
+        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td><td><select class="i-tipo"><option>Bulto</option><option>Pallet</option></select></td><td><input type="text" class="i-det"></td><td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td><td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td><td><button onclick="this.parentElement.parentElement.remove(); calcularTotales()">✕</button></td>`;
         document.getElementById('cuerpoItems').appendChild(tr);
         calcularTotales();
     }
@@ -262,14 +295,13 @@
         document.querySelectorAll('#cuerpoItems tr').forEach(r => {
             let c = parseFloat(r.querySelector('.i-cant').value)||0;
             f += c * (parseFloat(r.querySelector('.i-unit').value)||0);
-            vd += parseFloat(r.querySelector('.i-decl').value)||0;
+            vd += (parseFloat(r.querySelector('.i-decl').value)||0);
         });
-        let t = f + (vd * 0.008); // 0.8% seguro
+        let t = f + (vd * 0.008);
         document.getElementById('total_txt').innerText = `TOTAL: $ ${t.toFixed(2)}`;
         return { total: t };
     }
     window.onload = () => { if(!document.getElementById('cuerpoItems').innerHTML) agregarFila(); };
 </script>
-
 </body>
 </html>
