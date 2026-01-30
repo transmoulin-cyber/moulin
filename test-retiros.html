@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>LABORATORIO - MOULIN RETIROS</title>
+    <title>LABORATORIO - MOULIN V8.7 + RETIROS</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
@@ -32,59 +32,18 @@
         window.historialGlobal = [];
         window.clientesGlobal = {}; 
         window.retirosGlobal = [];
+        window.filtroEstadoActual = 'todos';
         let proximoNumero = 1001;
+        const PRECIOS_BASE = { "Bulto": 18000, "Pallet": 180000, "Sobre": 15000, "Caja": 18000 };
 
-        // --- LÓGICA DE RETIROS ---
+        // --- ESCUCHA DE RETIROS ---
         onValue(ref(db, 'moulin/retiros'), (snapshot) => {
             const data = snapshot.val();
             window.retirosGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, id})) : [];
             renderRetiros();
         });
 
-        window.solicitarRetiro = () => {
-            const r = {
-                cliente: document.getElementById('ret_n').value,
-                direccion: document.getElementById('ret_d').value,
-                localidad: document.getElementById('ret_l').value,
-                tel: document.getElementById('ret_t').value,
-                detalle: document.getElementById('ret_obs').value,
-                fecha: new Date().toLocaleDateString(),
-                estado: 'pendiente',
-                sucursal: PREFIJO
-            };
-            if(!r.cliente || !r.direccion) return alert("Cargar cliente y dirección");
-            push(ref(db, 'moulin/retiros'), r);
-            alert("Retiro solicitado correctamente");
-            document.querySelectorAll('.input-ret').forEach(i => i.value = "");
-        };
-
-        window.renderRetiros = () => {
-            const lista = document.getElementById('listaRetiros');
-            lista.innerHTML = window.retirosGlobal.filter(x => x.estado === 'pendiente').map(r => `
-                <div style="background:white; border-left:5px solid orange; padding:10px; margin-bottom:10px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <b>${r.cliente}</b> - ${r.direccion} (${r.localidad})<br>
-                        <small>Obs: ${r.detalle} | Fecha: ${r.fecha}</small>
-                    </div>
-                    <button onclick="convertirAGuia('${r.id}')" style="background:#1a4a7a; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer;">🚚 Convertir a Guía</button>
-                </div>
-            `).join('');
-        };
-
-        window.convertirAGuia = (id) => {
-            const r = window.retirosGlobal.find(x => x.id === id);
-            // Llenamos el formulario de guía
-            document.getElementById('r_n').value = r.cliente;
-            document.getElementById('r_d').value = r.direccion;
-            document.getElementById('r_l').value = r.localidad;
-            document.getElementById('r_t').value = r.tel;
-            // Cambiamos a la pestaña de guía
-            cambiarTab('tab-guia');
-            // Marcamos como "En proceso" o lo borramos después si querés
-            update(ref(db, `moulin/retiros/${id}`), { estado: 'en_guia' });
-        };
-
-        // --- LÓGICA DE GUIAS (TUYA ORIGINAL) ---
+        // --- ESCUCHA DE GUIAS ---
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
             const data = snapshot.val();
             window.historialGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
@@ -97,71 +56,281 @@
             renderHistorial();
         });
 
-        // (Mantengo el resto de tus funciones: completarCliente, calcularTotales, etc.)
-        // [Aquí va toda la lógica que ya tenías en la V8.7]
+        onValue(ref(db, 'moulin/clientes'), (snapshot) => {
+            window.clientesGlobal = snapshot.val() || {};
+            document.getElementById('lista_clientes').innerHTML = Object.keys(window.clientesGlobal).map(c => `<option value="${c}">`).join('');
+        });
+
+        // --- FUNCIONES DE RETIROS ---
+        window.solicitarRetiro = () => {
+            const r = {
+                cliente: document.getElementById('ret_n').value,
+                direccion: document.getElementById('ret_d').value,
+                localidad: document.getElementById('ret_l').value,
+                tel: document.getElementById('ret_t').value,
+                detalle: document.getElementById('ret_obs').value,
+                fecha: new Date().toLocaleDateString(),
+                estado: 'pendiente',
+                sucursal: PREFIJO
+            };
+            if(!r.cliente || !r.direccion) return alert("Faltan datos del retiro");
+            push(ref(db, 'moulin/retiros'), r);
+            alert("Retiro agendado");
+            document.querySelectorAll('.input-ret').forEach(i => i.value = "");
+        };
+
+        window.renderRetiros = () => {
+            const lista = document.getElementById('listaRetiros');
+            lista.innerHTML = window.retirosGlobal.filter(x => x.estado === 'pendiente').reverse().map(r => `
+                <div style="background:white; border-left:5px solid #f6ad55; padding:15px; margin-bottom:10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                    <div>
+                        <b style="color:var(--azul); font-size:16px;">${r.cliente}</b><br>
+                        <span>📍 ${r.direccion} (${r.localidad})</span><br>
+                        <small>📝 ${r.detalle} | 📅 ${r.fecha}</small>
+                    </div>
+                    <button onclick="convertirAGuia('${r.id}')" style="background:var(--azul); color:white; border:none; padding:10px 15px; border-radius:6px; cursor:pointer; font-weight:bold;">🚚 Traer Datos</button>
+                </div>
+            `).join('');
+        };
+
+        window.convertirAGuia = (id) => {
+            const r = window.retirosGlobal.find(x => x.id === id);
+            document.getElementById('r_n').value = r.cliente;
+            document.getElementById('r_d').value = r.direccion;
+            document.getElementById('r_l').value = r.localidad;
+            document.getElementById('r_t').value = r.tel;
+            cambiarTab('tab-guia');
+            // Opcional: marcarlo como "En proceso"
+            update(ref(db, `moulin/retiros/${id}`), { estado: 'en_guia' });
+        };
+
+        // --- FUNCIONES ORIGINALES GUIAS ---
+        window.completarCliente = (tipo) => {
+            const n = document.getElementById(`${tipo}_n`).value.trim();
+            const c = window.clientesGlobal[Object.keys(window.clientesGlobal).find(k => k.toLowerCase() === n.toLowerCase())];
+            if (c) {
+                document.getElementById(`${tipo}_t`).value = c.t || "";
+                document.getElementById(`${tipo}_d`).value = c.d || "";
+                document.getElementById(`${tipo}_l`).value = c.l || "";
+                document.getElementById(`${tipo}_cbu`).value = c.cbu || "";
+            }
+        };
+
+        window.actualizarPrecioXDefecto = (inputTipo) => {
+            const tr = inputTipo.closest('tr');
+            tr.querySelector('.i-unit').value = PRECIOS_BASE[inputTipo.value] || 0;
+            calcularTotales();
+        };
+
+        window.cambiarFiltroEstado = (est, btn) => {
+            window.filtroEstadoActual = est;
+            document.querySelectorAll('.btn-f').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderHistorial();
+        };
+
+        window.actualizarEstadoNube = (id, est) => update(ref(db, `moulin/guias/${id}`), { estado: est });
+
+        window.renderHistorial = () => {
+            const busq = document.getElementById('busq').value.toLowerCase();
+            const filtrados = window.historialGlobal.filter(g => {
+                let suc = (PREFIJO_BASE === "ADM" || PREFIJO_BASE === "TODO") || 
+                          (PREFIJO === "RECON" ? (g.num.startsWith("RECON") || g.num.startsWith("REC")) : g.num.startsWith(PREFIJO));
+                let est = (window.filtroEstadoActual === 'todos' || g.estado === window.filtroEstadoActual);
+                const b = g.num.toLowerCase().includes(busq) || g.r_n.toLowerCase().includes(busq) || g.d_n.toLowerCase().includes(busq);
+                return suc && est && b;
+            });
+            document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 30).map(g => `
+                <tr>
+                    <td><b>${g.num}</b></td>
+                    <td>${g.fecha}</td>
+                    <td>${g.r_n} > ${g.d_n}</td>
+                    <td>$${g.total}</td>
+                    <td><select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px;">
+                        <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
+                        <option value="deposito" ${g.estado==='deposito'?'selected':''}>Depósito</option>
+                        <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado</option>
+                    </select></td>
+                    <td><button onclick="reimprimir('${g.num}')">🖨️</button></td>
+                </tr>
+            `).join('');
+        };
+
+        window.confirmarYEmitir = function() {
+            if(!document.getElementById('r_n').value || !document.getElementById('d_n').value) return alert("Faltan clientes.");
+            const tot = calcularTotales();
+            const idU = Date.now();
+            const g = {
+                num: `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`,
+                fecha: new Date().toLocaleDateString(),
+                r_n: document.getElementById('r_n').value, r_t: document.getElementById('r_t').value, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value, r_cbu: document.getElementById('r_cbu').value,
+                d_n: document.getElementById('d_n').value, d_t: document.getElementById('d_t').value, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value, d_cbu: document.getElementById('d_cbu').value,
+                flete: tot.flete.toFixed(2), seg: tot.seg.toFixed(2), total: tot.total.toFixed(2), v_decl: tot.v_decl.toFixed(2), cant_t: tot.cant_t,
+                pago_en: document.getElementById('pago_en').value, condicion: document.getElementById('condicion').value,
+                cr_activo: document.getElementById('cr_act').value, cr_monto: document.getElementById('cr_monto').value,
+                p_seg_aplicado: document.getElementById('p_seg').value, estado: 'recibido', emisor: NOMBRE_OP,
+                items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(r => ({
+                    c: r.querySelector('.i-cant').value, t: r.querySelector('.i-tipo').value, d: r.querySelector('.i-det').value, u: r.querySelector('.i-unit').value, vd: r.querySelector('.i-decl').value
+                }))
+            };
+            update(ref(db), { [`moulin/guias/${idU}`]: g }).then(() => { imprimir(g); setTimeout(() => location.reload(), 800); });
+        };
     </script>
 
     <style>
         :root { --azul: #1a4a7a; --oscuro: #102a43; --verde: #38a169; }
         body { font-family: sans-serif; background: #f0f4f8; margin: 0; padding-bottom: 120px; }
         .nav-tabs { background: var(--oscuro); padding: 10px; display: flex; gap: 10px; justify-content: center; position: sticky; top: 0; z-index: 2000; }
-        .nav-tabs button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #243b55; color: white; }
-        .nav-tabs button.active { background: #3182ce; }
+        .nav-tabs button { padding: 12px 25px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; background: #243b55; color: white; transition: 0.3s; }
+        .nav-tabs button.active { background: #3182ce; box-shadow: 0 0 10px rgba(49, 130, 206, 0.5); }
         .tab-content { display: none; padding: 20px; }
         .tab-content.active { display: block; }
-        /* Tus estilos originales */
         .hoja { background: white; max-width: 950px; margin: auto; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .caja { background: #f8fafc; padding: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px; border-radius: 6px; }
         input, select { padding: 7px; border: 1px solid #cbd5e1; border-radius: 4px; width: 95%; margin-bottom: 4px; font-size: 13px; }
+        .tabla-items { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .tabla-items th { background: var(--azul); color: white; padding: 5px; }
         .btn-imprimir { background: var(--verde); color: white; border: none; padding: 15px 40px; border-radius: 30px; font-size: 18px; cursor: pointer; font-weight: bold; }
-        /* [Resto de tus estilos...] */
+        .btn-f { padding: 8px 12px; border: 1px solid #ccc; background: white; cursor: pointer; border-radius: 4px; font-size: 12px; }
+        .active-f { background: var(--azul) !important; color: white; }
+        
+        @media print { 
+            .no-print { display: none !important; } 
+            #seccion-impresion { display: block !important; } 
+            .cupon { height: 11cm; border: 1px solid #000; padding: 12px; display: flex; flex-direction: column; page-break-after: avoid; font-size: 13px; margin-bottom: 0.3cm; }
+            .resaltado { background: #eee !important; font-weight: bold; padding: 0 4px; border: 1px solid #ccc; }
+            .tabla-items-print { width: 100%; border-collapse: collapse; font-size: 12px; }
+            .tabla-items-print th, .tabla-items-print td { border: 1px solid #000; padding: 4px; }
+            .etiqueta { height: 4cm; border: 2px dashed #000; padding: 8px; display: flex; align-items: center; justify-content: space-between; page-break-after: always; }
+        }
+        #seccion-impresion { display: none; }
     </style>
 </head>
 <body>
 
+<datalist id="lista_clientes"></datalist>
+
 <div class="nav-tabs no-print">
-    <button id="btn-guia" class="active" onclick="cambiarTab('tab-guia')">1. EMITIR GUÍA</button>
-    <button id="btn-retiros" onclick="cambiarTab('tab-retiros')">2. SOLICITUD DE RETIROS</button>
+    <button id="btn-guia" class="active" onclick="cambiarTab('tab-guia')">📦 EMITIR GUÍA</button>
+    <button id="btn-retiros" onclick="cambiarTab('tab-retiros')">📝 PEDIDOS DE RETIRO</button>
 </div>
 
 <div id="tab-guia" class="tab-content active">
     <div class="hoja no-print">
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid var(--azul); margin-bottom:15px;">
-            <h2>TRANSPORTE MOULIN - EMISIÓN</h2>
+            <div style="display:flex; align-items:center;">
+                <img src="logo.png" style="height:50px; margin-right:10px;" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
+                <h2 style="margin:0;">MOULIN V8.7</h2>
+            </div>
             <b id="display_guia" style="font-size:28px; color:red;">---</b>
         </div>
+
+        <div class="caja">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                <div><b>REMITENTE</b><input type="text" id="r_n" list="lista_clientes" placeholder="Nombre" oninput="completarCliente('r')"><input type="text" id="r_d" placeholder="Dirección"><input type="text" id="r_l" placeholder="Localidad"><input type="text" id="r_t" placeholder="Teléfono"><input type="hidden" id="r_cbu"></div>
+                <div><b>DESTINATARIO</b><input type="text" id="d_n" list="lista_clientes" placeholder="Nombre" oninput="completarCliente('d')"><input type="text" id="d_d" placeholder="Dirección"><input type="text" id="d_l" placeholder="Localidad"><input type="text" id="d_t" placeholder="Teléfono"><input type="hidden" id="d_cbu"></div>
+            </div>
         </div>
+
+        <div class="caja">
+            <table class="tabla-items"><thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unitario $</th><th>V.Decl $</th><th></th></tr></thead><tbody id="cuerpoItems"></tbody></table>
+            <button onclick="agregarFila()" style="margin-top:10px;">+ Agregar Bulto</button>
+        </div>
+
+        <div class="caja" style="background:#edf2f7; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <select id="pago_en" style="width:150px;"><option>PAGO EN ORIGEN</option><option>PAGO EN DESTINO</option></select>
+            <select id="condicion" style="width:120px;"><option>CONTADO</option><option>CTA CTE</option></select>
+            <div style="padding:5px; display:flex; align-items:center;">Seg % <input type="number" id="p_seg" value="0.8" step="0.1" style="width:50px;"></div>
+            <select id="cr_act" style="width:110px;"><option value="N">CR: NO</option><option value="S">CR: SI</option></select>
+            <input type="number" id="cr_monto" placeholder="$ CR" value="0" style="width:90px;">
+        </div>
+
+        <div style="margin-top:20px;">
+            <input type="text" id="busq" placeholder="🔍 Buscar guía..." oninput="renderHistorial()" style="width:100%; border:2px solid var(--azul);">
+            <table class="tabla-items"><thead><tr style="background:#eee;"><th>Guía</th><th>Fecha</th><th>Ruta</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody id="listaHistorial"></tbody></table>
+        </div>
+    </div>
 </div>
 
 <div id="tab-retiros" class="tab-content">
     <div class="hoja">
-        <h2>SOLICITAR RETIRO</h2>
+        <h2 style="color:var(--azul);">📝 Nuevo Pedido de Retiro</h2>
         <div class="caja" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-            <input type="text" id="ret_n" class="input-ret" placeholder="Nombre/Cliente">
+            <input type="text" id="ret_n" class="input-ret" placeholder="Nombre de quien envía">
             <input type="text" id="ret_d" class="input-ret" placeholder="Dirección de Retiro">
             <input type="text" id="ret_l" class="input-ret" placeholder="Localidad">
-            <input type="text" id="ret_t" class="input-ret" placeholder="Teléfono">
-            <input type="text" id="ret_obs" class="input-ret" style="grid-column: span 2;" placeholder="¿Qué hay que retirar? (Ej: 2 pallets, 1 caja grande)">
-            <button onclick="solicitarRetiro()" style="grid-column: span 2; padding:15px; background:var(--verde); color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">CARGAR PEDIDO DE RETIRO</button>
+            <input type="text" id="ret_t" class="input-ret" placeholder="Teléfono de contacto">
+            <textarea id="ret_obs" class="input-ret" style="grid-column: span 2; padding:10px; border-radius:4px; border:1px solid #cbd5e1;" rows="2" placeholder="Detalles (Ej: 3 bultos, retirar después de las 16hs)"></textarea>
+            <button onclick="solicitarRetiro()" style="grid-column: span 2; padding:15px; background:var(--verde); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">AGENDAR RETIRO</button>
         </div>
         
-        <h3 style="margin-top:30px; color:var(--azul);">RETIROS PENDIENTES</h3>
-        <div id="listaRetiros">
-            </div>
+        <h3 style="margin-top:30px; color:var(--oscuro); border-bottom: 2px solid #eee;">⏳ Retiros Pendientes en ${PREFIJO}</h3>
+        <div id="listaRetiros" style="margin-top:15px;"></div>
     </div>
 </div>
+
+<div class="no-print" style="position:fixed; bottom:0; left:0; width:100%; background:var(--oscuro); color:white; padding:15px; display:flex; justify-content:space-around; align-items:center; z-index:1000;">
+    <div id="total_txt" style="font-size:20px; font-weight:bold; color:#48bb78;">TOTAL: $ 0.00</div>
+    <button class="btn-imprimir" onclick="confirmarYEmitir()">GRABAR E IMPRIMIR</button>
+</div>
+
+<div id="seccion-impresion"></div>
 
 <script>
     function cambiarTab(id) {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        if(id === 'tab-guia') document.getElementById('btn-guia').classList.add('active');
-        if(id === 'tab-retiros') document.getElementById('btn-retiros').classList.add('active');
+        document.getElementById('btn-' + id.split('-')[1]).classList.add('active');
     }
 
-    // [Pegar aquí tus funciones de agregarFila, imprimir, calcularTotales, etc.]
-</script>
+    function agregarFila() {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td>
+            <td><select class="i-tipo" onchange="actualizarPrecioXDefecto(this)"><option>Bulto</option><option>Pallet</option><option>Sobre</option><option>Caja</option></select></td>
+            <td><input type="text" class="i-det"></td>
+            <td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td>
+            <td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td>
+            <td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
+        document.getElementById('cuerpoItems').appendChild(tr);
+        calcularTotales();
+    }
 
+    function calcularTotales() {
+        let f = 0, vd = 0, cant = 0;
+        document.querySelectorAll('#cuerpoItems tr').forEach(r => {
+            let c = parseFloat(r.querySelector('.i-cant').value)||0;
+            f += c * (parseFloat(r.querySelector('.i-unit').value)||0);
+            vd += parseFloat(r.querySelector('.i-decl').value)||0;
+            cant += c;
+        });
+        let s = vd * (parseFloat(document.getElementById('p_seg').value)/100);
+        let t = f + s;
+        document.getElementById('total_txt').innerHTML = `<small style="font-size:12px; color:#ccc;">Bultos: ${cant} | Flete: $${f}</small><br>TOTAL: $ ${t.toFixed(2)}`;
+        return { flete: f, seg: s, total: t, v_decl: vd, cant_t: cant };
+    }
+
+    function imprimir(g) {
+        let itemsH = g.items.map(i => `<tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d}</td><td align="right">$${i.u}</td><td align="right">$${i.vd}</td></tr>`).join('');
+        let html = "";
+        ['ORIGINAL', 'DUPLICADO'].forEach(tit => {
+            html += `<div class="cupon">
+                <div style="display:flex; justify-content:space-between; border-bottom:2px solid #000;">
+                    <b>MOULIN</b> <span>${tit}</span> <b style="color:red; font-size:18px;">${g.num}</b>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin:5px 0;">
+                    <div style="border:1px solid #000; padding:5px;"><b>R:</b> ${g.r_n}<br>${g.r_l}</div>
+                    <div style="border:1px solid #000; padding:5px;"><b>D:</b> ${g.d_n}<br>${g.d_l}</div>
+                </div>
+                <table class="tabla-items-print"><thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th><th>V.D</th></tr></thead><tbody>${itemsH}</tbody></table>
+                <div style="text-align:right; font-weight:bold; margin-top:5px;">${g.pago_en} | TOTAL: $${g.total}</div>
+            </div>`;
+        });
+        document.getElementById('seccion-impresion').innerHTML = html;
+        window.print();
+    }
+
+    window.onload = () => { if(!document.getElementById('cuerpoItems').innerHTML) agregarFila(); };
+</script>
 </body>
 </html>
