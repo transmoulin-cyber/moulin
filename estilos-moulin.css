@@ -12,7 +12,7 @@ body {
     font-family: 'Segoe UI', Arial, sans-serif;
     background: var(--gris-fondo);
     margin: 0;
-    padding-bottom: 100px; /* Espacio para el footer fijo */
+    padding-bottom: 100px; 
     color: #333;
 }
 
@@ -76,8 +76,9 @@ body {
     border-radius: 8px;
 }
 
-/* --- FORMULARIOS --- */
+/* --- FORMULARIOS Y GRID PAGO --- */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
 input, select, textarea {
     width: 100%;
     padding: 10px;
@@ -85,6 +86,31 @@ input, select, textarea {
     border: 1px solid #cbd5e1;
     border-radius: 5px;
     box-sizing: border-box;
+}
+
+/* Diseño de Pago V8.7 (Fuera de @media print) */
+.grid-pago {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    background: #fdfdfd;
+    padding: 15px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.grid-pago label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 11px;
+    color: var(--azul);
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+#monto_container {
+    grid-column: span 2;
 }
 
 .num-rojo { font-size: 28px; color: var(--rojo); }
@@ -141,7 +167,9 @@ input, select, textarea {
     cursor: pointer;
 }
 
-/* --- IMPRESIÓN (EL CORAZÓN DEL SISTEMA) --- */
+/* --- IMPRESIÓN --- */
+#seccion-impresion { display: none; }
+
 @media print {
     .no-print { display: none !important; }
     #seccion-impresion { display: block !important; }
@@ -167,5 +195,3 @@ input, select, textarea {
         border-radius: 10px;
     }
 }
-
-#seccion-impresion { display: none; }
