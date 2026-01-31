@@ -22,96 +22,68 @@ const NOMBRE_OP = sesion?.nombre || "Operador";
 let proximoNumero = 1001;
 let historialGlobal = [];
 let retirosGlobal = [];
+window.clientesGlobales = []; // Base de datos unificada
 
-// 2. ESCUCHAS EN TIEMPO REAL (Firebase)
+// 2. ESCUCHAS EN TIEMPO REAL
+// --- Clientes (Unificados para todas las sucursales) ---
+onValue(ref(db, 'moulin/clientes'), (snapshot) => {
+    const data = snapshot.val();
+    window.clientesGlobales = data ? Object.values(data) : [];
+    const listaDL = document.getElementById('lista_clientes');
+    if(listaDL) {
+        listaDL.innerHTML = window.clientesGlobales.map(c => `<option value="${c.nombre}">`).join('');
+    }
+});
+
+// --- Retiros (Filtrados por Sucursal) ---
 onValue(ref(db, 'moulin/retiros'), (snapshot) => {
     const data = snapshot.val();
     retirosGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, id})) : [];
     renderRetiros();
 });
 
-// --- 2.1 CARGA UNIFICADA DE CLIENTES ---
-onValue(ref(db, 'moulin/clientes'), (snapshot) => {
-    const data = snapshot.val();
-    // Guardamos en una lista global para que funcione en ambos formularios
-    window.clientesGlobales = data ? Object.values(data) : [];
-    
-    // Llenamos el ÚNICO datalist que usan ambos (Remitente y Destinatario)
-    const listaDL = document.getElementById('lista_clientes');
-    if(listaDL) {
-        listaDL.innerHTML = window.clientesGlobales
-            .map(c => `<option value="${c.nombre}">`)
-            .join('');
-    }
-});
-
-// --- 2.2 MOTOR DE AUTOCOMPLETADO (PARA CUALQUIER BLOQUE) ---
-const ejecutarAutocompletado = (idInput, prefijo) => {
-    const input = document.getElementById(idInput);
-    if (!input) return;
-
-    // Escuchamos cuando el usuario elige un nombre de la lista
-    input.addEventListener('change', (e) => {
-        const nombreSel = e.target.value;
-        // Buscamos en la lista global (no importa si es remitente o destinatario)
-        const cliente = window.clientesGlobales.find(c => c.nombre === nombreSel);
-        
-        if (cliente) {
-            // Llenamos los 5 campos del bloque correspondiente
-            // Usamos 'd' para Dirección, 'l' para Localidad, 't' para Teléfono y 'cbu'
-            if(document.getElementById(`${prefijo}_d`)) document.getElementById(`${prefijo}_d`).value = cliente.direccion || '';
-            if(document.getElementById(`${prefijo}_l`)) document.getElementById(`${prefijo}_l`).value = cliente.localidad || '';
-            if(document.getElementById(`${prefijo}_t`)) document.getElementById(`${prefijo}_t`).value = cliente.telefono || '';
-            if(document.getElementById(`${prefijo}_cbu`)) document.getElementById(`${prefijo}_cbu`).value = cliente.cbu || '';
-            
-            console.log(`Autocompletado exitoso en bloque: ${prefijo}`);
-        }
-    });
-};
-
-// Activamos los sensores para ambos bloques usando la misma base de datos
-ejecutarAutocompletado('r_n', 'r'); // Para el bloque Remitente
-ejecutarAutocompletado('d_n', 'd'); // Para el bloque Destinatario
-// --- 2.2 LÓGICA DE AUTOCOMPLETADO TOTAL (SALTO DE BLOQUE) ---
-const configurarAutocompletado = (idInput, prefijo) => {
-    const input = document.getElementById(idInput);
-    if (!input) return;
-
-    input.addEventListener('change', (e) => {
-        const nombreSel = e.target.value;
-        // Buscamos el cliente exacto
-        const cliente = window.clientes.find(c => c.nombre === nombreSel);
-        
-        if (cliente) {
-            // Llenamos todos los campos del bloque de una sola vez
-            document.getElementById(`${prefijo}_d`).value = cliente.direccion || '';
-            document.getElementById(`${prefijo}_l`).value = cliente.localidad || '';
-            document.getElementById(`${prefijo}_t`).value = cliente.telefono || '';
-            document.getElementById(`${prefijo}_cbu`).value = cliente.cbu || '';
-            
-            console.log(`Sistema: Datos de ${prefijo === 'r' ? 'Remitente' : 'Destinatario'} cargados.`);
-        }
-    });
-};
-
-// Activamos la función para los dos formularios
-configurarAutocompletado('r_n', 'r');
-configurarAutocompletado('d_n', 'd');
-
+// --- Guías e Historial (FILTRO DE SEGURIDAD POR SUCURSAL) ---
 onValue(ref(db, 'moulin/guias'), (snapshot) => {
     const data = snapshot.val();
-    historialGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
+    const todas = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
     
-    const misGuias = historialGlobal.filter(g => g.num.startsWith(PREFIJO));
+    // El administrativo solo ve las guías de su prefijo
+    if (PREFIJO_BASE !== "TODO" && PREFIJO_BASE !== "ADM") {
+        historialGlobal = todas.filter(g => g.num.startsWith(PREFIJO));
+    } else {
+        historialGlobal = todas;
+    }
+    
+    // Cálculo del próximo número basado en su prefijo
+    const misGuias = todas.filter(g => g.num.startsWith(PREFIJO));
     if (misGuias.length > 0) {
-        const max = Math.max(...misGuias.map(g => parseInt(g.num.split('-')[1]) || 0));
-        proximoNumero = max + 1;
+        const nros = misGuias.map(g => parseInt(g.num.split('-')[1]) || 0);
+        proximoNumero = Math.max(...nros) + 1;
     }
     document.getElementById('display_guia').innerText = `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`;
     renderHistorial();
 });
 
-// 3. LÓGICA DE INTERFAZ (Tabs y Bultos)
+// 3. MOTOR DE AUTOCOMPLETADO (Universal)
+const ejecutarAutocompletado = (idInput, prefijo) => {
+    const input = document.getElementById(idInput);
+    if (!input) return;
+    input.addEventListener('change', (e) => {
+        const cliente = window.clientesGlobales.find(c => c.nombre === e.target.value);
+        if (cliente) {
+            // Rellena todos los campos del bloque (r o d)
+            const campos = ['d', 'l', 't', 'cbu'];
+            campos.forEach(c => {
+                const el = document.getElementById(`${prefijo}_${c}`);
+                if(el) el.value = cliente[c === 'd' ? 'direccion' : c === 'l' ? 'localidad' : c === 't' ? 'telefono' : 'cbu'] || '';
+            });
+        }
+    });
+};
+ejecutarAutocompletado('r_n', 'r');
+ejecutarAutocompletado('d_n', 'd');
+
+// 4. LÓGICA DE INTERFAZ
 document.querySelectorAll('.nav-tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-content, .nav-tabs button').forEach(el => el.classList.remove('active'));
@@ -151,61 +123,69 @@ function calcularTotales() {
     return { total, v_decl: vdecl };
 }
 
-// 4. GRABADO E IMPRESIÓN (Las 3 Hojas)
+// 5. GRABADO E IMPRESIÓN
 document.getElementById('btn-emitir').onclick = async () => {
     const totales = calcularTotales();
+    const cr_activo = document.getElementById('cr_activo').value;
+    
     const guia = {
         num: `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`,
         fecha: new Date().toLocaleDateString(),
         operador: NOMBRE_OP,
-        r_n: document.getElementById('r_n').value, r_l: document.getElementById('r_l').value, r_cbu: document.getElementById('r_cbu').value,
-        d_n: document.getElementById('d_n').value, d_l: document.getElementById('d_l').value, d_d: document.getElementById('d_d').value, d_cbu: document.getElementById('d_cbu').value,
+        r_n: document.getElementById('r_n').value, r_d: document.getElementById('r_d').value,
+        r_l: document.getElementById('r_l').value, r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value,
+        d_n: document.getElementById('d_n').value, d_d: document.getElementById('d_d').value,
+        d_l: document.getElementById('d_l').value, d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value,
         items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(tr => ({
             cant: tr.querySelector('.i-cant').value, tipo: tr.querySelector('.i-tipo').value, det: tr.querySelector('.i-det').value
         })),
         total: totales.total,
-        cr_monto: document.getElementById('cr_monto').value || 0,
-        pago_en: document.getElementById('pago_en').value
+        cr_monto: cr_activo === 'SI' ? (document.getElementById('cr_monto').value || 0) : 0,
+        pago_en: document.getElementById('pago_en').value,
+        condicion: document.getElementById('condicion').value
     };
 
     if(!guia.r_n || !guia.d_n) return alert("Faltan datos de clientes.");
 
     await set(ref(db, `moulin/guias/${Date.now()}`), guia);
+    // Guardar/Actualizar cliente en base global automáticamente
+    const clienteNuevo = { nombre: guia.d_n, direccion: guia.d_d, localidad: guia.d_l, telefono: guia.d_t, cbu: guia.d_cbu };
+    set(ref(db, `moulin/clientes/${guia.d_n.replace(/[.#$/[\]]/g, "")}`), clienteNuevo);
+
     imprimirTresHojas(guia);
     location.reload();
 };
 
 function imprimirTresHojas(g) {
-    let etiquetas = "";
     let totalBultos = g.items.reduce((acc, item) => acc + parseInt(item.cant), 0);
-    
+    let etiquetas = "";
     for(let i=1; i<=totalBultos; i++) {
         etiquetas += `<div class="etiqueta"><h2>MOULIN</h2><p>GUÍA: ${g.num}</p><p>DESTINO: ${g.d_l}</p><p>Bulto ${i} de ${totalBultos}</p></div>`;
     }
-
     const win = window.open('', '_blank');
-    win.document.write(`
-        <html><head><link rel="stylesheet" href="estilos-moulin.css"></head><body>
-            <div class="hoja-imp"><h1>COPIA REMITENTE</h1><p>Guía: ${g.num}</p><p>De: ${g.r_n}</p><p>Para: ${g.d_n}</p><p>Total: $${g.total}</p></div>
-            <div class="page-break"></div>
-            <div class="hoja-imp"><h1>COPIA DESTINATARIO</h1><p>Guía: ${g.num}</p><p>CR: $${g.cr_monto}</p></div>
-            <div class="page-break"></div>
-            <div class="hoja-etiquetas">${etiquetas}</div>
-        </body></html>
-    `);
+    win.document.write(`<html><head><link rel="stylesheet" href="estilos-moulin.css"></head><body>
+        <div class="hoja-imp"><h1>COPIA REMITENTE</h1><p>Guía: ${g.num}</p><p>De: ${g.r_n}</p><p>Para: ${g.d_n}</p><p>Total: $${g.total}</p></div>
+        <div class="page-break"></div>
+        <div class="hoja-imp"><h1>COPIA DESTINATARIO</h1><p>Guía: ${g.num}</p><p>CONTRA REEMBOLSO: $${g.cr_monto}</p></div>
+        <div class="page-break"></div>
+        <div class="hoja-etiquetas">${etiquetas}</div>
+    </body></html>`);
     win.document.close();
     win.print();
 }
 
-// 5. RETIROS (Funciones Globales)
+// 6. FUNCIONES DE RETIROS
 window.convertirAGuia = (id) => {
     const r = retirosGlobal.find(x => x.id === id);
     document.getElementById('r_n').value = r.r_lugar; 
     document.getElementById('r_l').value = r.r_loc;
     document.getElementById('d_n').value = r.s_nom;
     document.getElementById('d_l').value = r.s_loc;
-    if(r.cr > 0) document.getElementById('cr_monto').value = r.cr;
-    
+    if(r.cr > 0) {
+        document.getElementById('cr_activo').value = 'SI';
+        document.getElementById('cr_monto').style.display = 'block';
+        document.getElementById('cr_monto').value = r.cr;
+    }
     document.getElementById('btn-guia').click();
     update(ref(db, `moulin/retiros/${id}`), { estado: 'en_guia' });
 };
@@ -220,18 +200,17 @@ function renderRetiros() {
             <button onclick="convertirAGuia('${r.id}')">PROCESAR</button>
         </div>
     `).join('');
-    document.getElementById('badge-retiros').innerText = pends.length;
-    document.getElementById('badge-retiros').style.display = pends.length ? 'block' : 'none';
+    const b = document.getElementById('badge-retiros');
+    if(b) { b.innerText = pends.length; b.style.display = pends.length ? 'block' : 'none'; }
 }
 
 function renderHistorial() {
     const tbody = document.getElementById('listaHistorial');
-    tbody.innerHTML = historialGlobal.slice(0,20).map(g => `
-        <tr><td>${g.num}</td><td>${g.fecha}</td><td>${g.d_l}</td><td>$${g.total}</td><td>🖨️</td></tr>
-    `).join('');
+    if(tbody) {
+        tbody.innerHTML = historialGlobal.slice(0,20).map(g => `
+            <tr><td>${g.num}</td><td>${g.fecha}</td><td>${g.d_l}</td><td>$${g.total}</td><td>🖨️</td></tr>
+        `).join('');
+    }
 }
 
-// Iniciar con una fila
-
 agregarFila();
-
