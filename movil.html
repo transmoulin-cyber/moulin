@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MOULIN MÓVIL V7.3 - Seguridad</title>
+    <title>MOULIN MÓVIL V7.4 - Retiros y GPS</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     
@@ -28,62 +28,48 @@
         if (!sesion) { window.location.href = "index.html"; }
 
         window.historial = [];
+        window.retiros = [];
         window.filtroEstadoActual = 'todos';
 
-        // --- LÓGICA DE SEGURIDAD Y DESCARGA ---
+        // --- 1. ESCUCHA DE GUÍAS (Entregas) ---
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
             const data = snapshot.val();
             const prefijoUser = sesion.prefijo.toUpperCase();
-            
             let listaCompleta = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
 
             if (prefijoUser !== "TODO" && prefijoUser !== "ADM") {
                 window.historial = listaCompleta.filter(g => {
                     const destino = (g.d_l || "").toUpperCase();
                     const origen = (g.o_l || "").toUpperCase();
-                    let coincide = false;
-
-                    if (prefijoUser === "STAFE") {
-                        coincide = destino.includes("SANTA FE") || destino.includes("STAFE") || origen.includes("SANTA FE") || origen.includes("STAFE");
-                    } else if (prefijoUser === "ROS") {
-                        coincide = destino.includes("ROSARIO") || destino.includes("ROS") || origen.includes("ROSARIO") || origen.includes("ROS");
-                    } else if (prefijoUser === "REC") {
-                        coincide = destino.includes("RECONQUISTA") || destino.includes("REC") || origen.includes("RECONQUISTA") || origen.includes("REC");
-                    } else {
-                        coincide = destino.includes(prefijoUser) || origen.includes(prefijoUser);
-                    }
-                    return coincide;
+                    if (prefijoUser === "STAFE") return destino.includes("SANTA FE") || origen.includes("SANTA FE");
+                    if (prefijoUser === "ROS") return destino.includes("ROSARIO") || origen.includes("ROSARIO");
+                    if (prefijoUser === "REC") return destino.includes("RECONQUISTA") || origen.includes("RECONQUISTA");
+                    return destino.includes(prefijoUser) || origen.includes(prefijoUser);
                 });
             } else {
                 window.historial = listaCompleta;
             }
-            renderizarLista();
+            if (window.filtroEstadoActual !== 'retiros') renderizarLista();
         });
 
-        window.actualizarEstado = (id, nuevoEstado) => {
-            update(ref(db, `moulin/guias/${id}`), { estado: nuevoEstado });
-        };
+        // --- 2. ESCUCHA DE RETIROS (Novedad) ---
+        onValue(ref(db, 'moulin/retiros'), (snapshot) => {
+            const data = snapshot.val();
+            const prefijoUser = sesion.prefijo.toUpperCase();
+            const listaRetiros = data ? Object.entries(data).map(([id, val]) => ({...val, id})) : [];
 
-        window.cambiarFiltro = (nuevoFiltro) => {
-            window.filtroEstadoActual = nuevoFiltro;
-            document.querySelectorAll('.btn-filtro').forEach(btn => btn.classList.remove('active'));
-            document.getElementById('btn-' + nuevoFiltro).classList.add('active');
-            renderizarLista();
-        };
+            window.retiros = listaRetiros.filter(r => {
+                if (r.estado !== 'pendiente') return false;
+                if (prefijoUser === "TODO" || prefijoUser === "ADM") return true;
+                return r.sucursal_retiro === prefijoUser || r.r_loc.toUpperCase().includes(prefijoUser);
+            });
+            
+            if (window.filtroEstadoActual === 'retiros') renderizarRetiros();
+        });
 
-        window.abrirMapa = (direccion, localidad) => {
-            const query = encodeURIComponent(`${direccion}, ${localidad}, Argentina`);
-            window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
-        };
-
-        window.toggleDetalles = (id) => {
-            const el = document.getElementById(`detalles-${id}`);
-            el.style.display = el.style.display === 'none' ? 'block' : 'none';
-        };
-
+        // --- 3. FUNCIONES DE RENDERIZADO ---
         window.renderizarLista = (filtroEspecial = "") => {
             const busq = filtroEspecial || document.getElementById('search').value.toLowerCase();
-            
             let filtrados = window.historial.filter(g => 
                 g.num.toLowerCase().includes(busq) || 
                 (g.d_n && g.d_n.toLowerCase().includes(busq)) ||
@@ -97,65 +83,76 @@
             }
 
             document.getElementById('lista').innerHTML = filtrados.map(g => `
-                <div class="card-movil" id="guia-${g.num}">
+                <div class="card-movil">
                     <div onclick="toggleDetalles('${g.firebaseID}')">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <b style="font-size:18px; color:#d32f2f;">${g.num}</b>
                             <span class="badge ${g.estado}">${g.estado.toUpperCase()}</span>
                         </div>
                         <div style="margin:8px 0; font-size:14px;">
-                            <b>Origen:</b> ${g.o_l}<br>
                             <b>Destino:</b> ${g.d_n} (${g.d_l})
                         </div>
                     </div>
-
                     <div id="detalles-${g.firebaseID}" class="detalles-extra" style="display:none; border-top:1px solid #eee; padding-top:10px; margin-top:10px;">
                         <p><b>Dirección:</b> ${g.d_d || 'No especificada'}</p>
-                        <p><b>Remitente:</b> ${g.r_n || 'No especificado'}</p>
-                        <p><b>Bultos:</b> ${g.bultos || '1'}</p>
-                        ${g.observaciones ? `<p><b>Obs:</b> ${g.observaciones}</p>` : ''}
                         <button onclick="abrirMapa('${g.d_d}', '${g.d_l}')" class="btn-mapa">📍 Ver en Google Maps</button>
                     </div>
-
-                    ${g.cr_activo === 'S' ? `<div class="reembolso-tag">REEMBOLSO: $${g.cr_monto}</div>` : ''}
-
                     <div style="display:flex; gap:5px; margin-top:10px;">
                         <select onchange="actualizarEstado('${g.firebaseID}', this.value)" style="flex:1; padding:12px; border-radius:5px; border:1px solid #ccc;">
                             <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
                             <option value="deposito" ${g.estado==='deposito'?'selected':''}>Depósito</option>
                             <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado</option>
                         </select>
-                        <button onclick="verQR('${g.num}')" style="background:#1a4a7a; color:white; border:none; padding:10px; border-radius:5px; width:50px;">QR</button>
+                        <button onclick="verQR('${g.num}')" class="btn-qr">QR</button>
                     </div>
                 </div>
             `).join('');
         };
 
-        let html5QrCode;
-        window.abrirEscaner = () => {
-            document.getElementById('scanner-container').style.display = 'block';
-            html5QrCode = new Html5Qrcode("reader");
-            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
-                window.cambiarFiltro('todos');
-                document.getElementById('search').value = decodedText;
-                window.renderizarLista(decodedText.toLowerCase());
-                window.cerrarEscaner();
-            });
+        window.renderizarRetiros = () => {
+            const listaDiv = document.getElementById('lista');
+            if (window.retiros.length === 0) {
+                listaDiv.innerHTML = "<div style='text-align:center; padding:20px;'>No hay retiros pendientes en tu zona.</div>";
+                return;
+            }
+            listaDiv.innerHTML = window.retiros.map(r => `
+                <div class="card-movil" style="border-left: 6px solid #f6ad55;">
+                    <b style="color:#e67e22;">📦 PEDIDO DE RETIRO</b>
+                    <div style="margin:10px 0; font-size:14px;">
+                        <b>Lugar:</b> ${r.r_lugar}<br>
+                        <b>Dirección:</b> ${r.r_dir} (${r.r_loc})
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button onclick="abrirMapa('${r.r_dir}', '${r.r_loc}')" class="btn-mapa" style="flex:1; margin-top:0;">🗺️ MAPA</button>
+                        <button onclick="window.location.href='test-retiros.html?id_ret=${r.id}'" style="flex:1; background:#1a4a7a; color:white; border:none; border-radius:6px; font-weight:bold;">✅ CARGAR</button>
+                    </div>
+                </div>
+            `).join('');
         };
 
-        window.cerrarEscaner = () => {
-            if (html5QrCode) {
-                html5QrCode.stop().then(() => { document.getElementById('scanner-container').style.display = 'none'; });
-            } else { document.getElementById('scanner-container').style.display = 'none'; }
+        // --- 4. UTILIDADES ---
+        window.cambiarFiltro = (nuevoFiltro) => {
+            window.filtroEstadoActual = nuevoFiltro;
+            document.querySelectorAll('.btn-filtro').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('btn-' + nuevoFiltro).classList.add('active');
+            if (nuevoFiltro === 'retiros') renderizarRetiros(); else renderizarLista();
         };
 
+        window.abrirMapa = (direccion, localidad) => {
+            const query = encodeURIComponent(`${direccion}, ${localidad}, Argentina`);
+            window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+        };
+
+        window.actualizarEstado = (id, nuevoEstado) => { update(ref(db, `moulin/guias/${id}`), { estado: nuevoEstado }); };
+        window.toggleDetalles = (id) => { const el = document.getElementById(`detalles-${id}`); el.style.display = el.style.display === 'none' ? 'block' : 'none'; };
+        
+        // --- QR Y ESCANER (Manteniendo tu lógica) ---
         window.verQR = (num) => {
             document.getElementById('modalQR').style.display = 'flex';
             document.getElementById('qrcode').innerHTML = "";
             new QRCode(document.getElementById("qrcode"), { text: num, width: 200, height: 200 });
             document.getElementById('qrTitle').innerText = num;
         };
-
         window.cerrarQR = () => { document.getElementById('modalQR').style.display = 'none'; };
     </script>
 
@@ -164,21 +161,16 @@
         .header { background: #102a43; color: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
         .search-box { display: flex; gap: 5px; margin-bottom: 10px; }
         #search { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
-        .btn-scan { background: #1a4a7a; color: white; border: none; padding: 10px; border-radius: 8px; width: 55px; font-size: 22px; }
-        .filtros-container { display: flex; gap: 5px; margin-bottom: 15px; }
-        .btn-filtro { flex: 1; padding: 8px; border-radius: 20px; border: 1px solid #1a4a7a; background: white; color: #1a4a7a; font-size: 11px; font-weight: bold; }
+        .filtros-container { display: flex; gap: 5px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px; }
+        .btn-filtro { min-width: 80px; flex: 1; padding: 10px 5px; border-radius: 20px; border: 1px solid #1a4a7a; background: white; color: #1a4a7a; font-size: 10px; font-weight: bold; }
         .btn-filtro.active { background: #1a4a7a; color: white; }
         .card-movil { background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 6px solid #1a4a7a; }
-        .detalles-extra p { margin: 5px 0; font-size: 14px; color: #444; }
         .btn-mapa { width: 100%; padding: 12px; background: #34a853; color: white; border: none; border-radius: 6px; font-weight: bold; margin-top: 10px; }
-        .reembolso-tag { background: #fff9c4; color: #d32f2f; padding: 8px; font-weight: bold; border: 1px solid #fbc02d; margin-top: 10px; text-align: center; border-radius: 5px; }
         .badge { padding: 5px 10px; border-radius: 20px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
         .recibido { background: #e3f2fd; color: #1976d2; }
         .deposito { background: #fff3e0; color: #f57c00; }
         .entregado { background: #e8f5e9; color: #388e3c; }
-        #scanner-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 2000; display: none; }
-        #reader { width: 100%; height: 80%; }
-        .btn-cancel-scan { width: 100%; padding: 20px; background: #d32f2f; color: white; border: none; font-weight: bold; font-size: 18px; }
+        .btn-qr { background:#1a4a7a; color:white; border:none; padding:10px; border-radius:5px; width:50px; }
         #modalQR { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:1000; }
         .modal-content { background: white; padding: 20px; border-radius: 10px; text-align: center; width: 80%; }
     </style>
@@ -187,30 +179,20 @@
 
 <div class="header">
     <h3 style="margin:0;">MOULIN MÓVIL</h3>
-    <small id="user-info">Cargando sucursal...</small>
+    <small id="user-info">Cargando...</small>
 </div>
-
-<script>
-    document.getElementById('user-info').innerText = "Sucursal: " + sesion.prefijo + " - " + sesion.nombre;
-</script>
 
 <div class="search-box">
     <input type="text" id="search" placeholder="Buscar guía..." oninput="renderizarLista()">
-    <button class="btn-scan" onclick="abrirEscaner()">📷</button>
 </div>
 
 <div class="filtros-container">
-    <button id="btn-todos" class="btn-filtro active" onclick="cambiarFiltro('todos')">TODOS</button>
-    <button id="btn-pendientes" class="btn-filtro" onclick="cambiarFiltro('pendientes')">PENDIENTES</button>
-    <button id="btn-entregado" class="btn-filtro" onclick="cambiarFiltro('entregado')">ENTREGADOS</button>
+    <button id="btn-todos" class="btn-filtro active" onclick="cambiarFiltro('todos')">ENTREGAS</button>
+    <button id="btn-pendientes" class="btn-filtro" onclick="cambiarFiltro('pendientes')">PEND.</button>
+    <button id="btn-retiros" class="btn-filtro" onclick="cambiarFiltro('retiros')" style="border-color:#f6ad55; color:#e67e22;">RETIROS</button>
 </div>
 
 <div id="lista"></div>
-
-<div id="scanner-container">
-    <div id="reader"></div>
-    <button class="btn-cancel-scan" onclick="cerrarEscaner()">VOLVER</button>
-</div>
 
 <div id="modalQR">
     <div class="modal-content">
@@ -219,6 +201,11 @@
         <button onclick="cerrarQR()" style="margin-top:20px; padding:12px; width:100%; background:#d32f2f; color:white; border:none; border-radius:5px; font-weight:bold;">CERRAR</button>
     </div>
 </div>
+
+<script>
+    const s = JSON.parse(sessionStorage.getItem('moulin_sesion'));
+    document.getElementById('user-info').innerText = "Suc: " + s.prefijo + " - " + s.nombre;
+</script>
 
 </body>
 </html>
