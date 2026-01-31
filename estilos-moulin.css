@@ -1,0 +1,171 @@
+/* --- VARIABLES Y BASES --- */
+:root {
+    --azul: #1a4a7a;
+    --oscuro: #102a43;
+    --verde: #38a169;
+    --rojo: #e53e3e;
+    --naranja: #f6ad55;
+    --gris-fondo: #f0f4f8;
+}
+
+body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--gris-fondo);
+    margin: 0;
+    padding-bottom: 100px; /* Espacio para el footer fijo */
+    color: #333;
+}
+
+/* --- NAVEGACIÓN (TABS) --- */
+.nav-tabs {
+    background: var(--oscuro);
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.nav-tabs button {
+    background: #243b55;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    position: relative;
+}
+
+.nav-tabs button.active {
+    background: #3182ce;
+}
+
+.badge {
+    background: var(--rojo);
+    color: white;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    border: 2px solid var(--oscuro);
+}
+
+/* --- CONTENEDORES --- */
+.tab-content { display: none; padding: 20px; }
+.tab-content.active { display: block; }
+
+.hoja {
+    background: white;
+    max-width: 900px;
+    margin: auto;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.caja {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+}
+
+/* --- FORMULARIOS --- */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+input, select, textarea {
+    width: 100%;
+    padding: 10px;
+    margin: 5px 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+
+.num-rojo { font-size: 28px; color: var(--rojo); }
+
+/* --- TABLAS --- */
+.tabla-items { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.tabla-items th { background: var(--azul); color: white; padding: 12px; text-align: left; }
+.tabla-items td { padding: 10px; border-bottom: 1px solid #eee; }
+
+/* --- RETIROS (TARJETAS) --- */
+.card-retiro {
+    background: white;
+    border-left: 6px solid var(--naranja);
+    padding: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.card-retiro button {
+    background: var(--azul);
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* --- FOOTER TOTALES --- */
+.footer-fijo {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    background: var(--oscuro);
+    color: white;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 20px;
+    box-shadow: 0 -5px 15px rgba(0,0,0,0.2);
+}
+
+.btn-emitir {
+    background: var(--verde);
+    color: white;
+    padding: 15px 40px;
+    border-radius: 30px;
+    font-size: 18px;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+}
+
+/* --- IMPRESIÓN (EL CORAZÓN DEL SISTEMA) --- */
+@media print {
+    .no-print { display: none !important; }
+    #seccion-impresion { display: block !important; }
+    .page-break { page-break-after: always; }
+    
+    .hoja-imp {
+        padding: 40px;
+        border: 2px solid #000;
+        margin-bottom: 20px;
+        min-height: 400px;
+    }
+
+    .hoja-etiquetas {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .etiqueta {
+        border: 3px solid #000;
+        padding: 20px;
+        text-align: center;
+        border-radius: 10px;
+    }
+}
+
+#seccion-impresion { display: none; }
