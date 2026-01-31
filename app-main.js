@@ -29,21 +29,49 @@ onValue(ref(db, 'moulin/retiros'), (snapshot) => {
     retirosGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, id})) : [];
     renderRetiros();
 });
-// --- 2.1 ESCUCHA DE CLIENTES PARA AUTOCOMPLETADO ---
+
+// --- 2.1 CARGA UNIFICADA DE CLIENTES ---
 onValue(ref(db, 'moulin/clientes'), (snapshot) => {
     const data = snapshot.val();
-    // Guardamos los clientes en una variable global para que el buscador los encuentre
-    window.clientes = data ? Object.values(data) : [];
+    // Guardamos en una lista global para que funcione en ambos formularios
+    window.clientesGlobales = data ? Object.values(data) : [];
     
-    // Llenamos el datalist del HTML para que aparezcan las sugerencias al escribir
+    // Llenamos el ÚNICO datalist que usan ambos (Remitente y Destinatario)
     const listaDL = document.getElementById('lista_clientes');
     if(listaDL) {
-        listaDL.innerHTML = window.clientes
+        listaDL.innerHTML = window.clientesGlobales
             .map(c => `<option value="${c.nombre}">`)
             .join('');
     }
 });
 
+// --- 2.2 MOTOR DE AUTOCOMPLETADO (PARA CUALQUIER BLOQUE) ---
+const ejecutarAutocompletado = (idInput, prefijo) => {
+    const input = document.getElementById(idInput);
+    if (!input) return;
+
+    // Escuchamos cuando el usuario elige un nombre de la lista
+    input.addEventListener('change', (e) => {
+        const nombreSel = e.target.value;
+        // Buscamos en la lista global (no importa si es remitente o destinatario)
+        const cliente = window.clientesGlobales.find(c => c.nombre === nombreSel);
+        
+        if (cliente) {
+            // Llenamos los 5 campos del bloque correspondiente
+            // Usamos 'd' para Dirección, 'l' para Localidad, 't' para Teléfono y 'cbu'
+            if(document.getElementById(`${prefijo}_d`)) document.getElementById(`${prefijo}_d`).value = cliente.direccion || '';
+            if(document.getElementById(`${prefijo}_l`)) document.getElementById(`${prefijo}_l`).value = cliente.localidad || '';
+            if(document.getElementById(`${prefijo}_t`)) document.getElementById(`${prefijo}_t`).value = cliente.telefono || '';
+            if(document.getElementById(`${prefijo}_cbu`)) document.getElementById(`${prefijo}_cbu`).value = cliente.cbu || '';
+            
+            console.log(`Autocompletado exitoso en bloque: ${prefijo}`);
+        }
+    });
+};
+
+// Activamos los sensores para ambos bloques usando la misma base de datos
+ejecutarAutocompletado('r_n', 'r'); // Para el bloque Remitente
+ejecutarAutocompletado('d_n', 'd'); // Para el bloque Destinatario
 // --- 2.2 LÓGICA DE AUTOCOMPLETADO TOTAL (SALTO DE BLOQUE) ---
 const configurarAutocompletado = (idInput, prefijo) => {
     const input = document.getElementById(idInput);
@@ -206,3 +234,4 @@ function renderHistorial() {
 // Iniciar con una fila
 
 agregarFila();
+
