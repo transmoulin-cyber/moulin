@@ -29,6 +29,46 @@ onValue(ref(db, 'moulin/retiros'), (snapshot) => {
     retirosGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, id})) : [];
     renderRetiros();
 });
+// --- 2.1 ESCUCHA DE CLIENTES PARA AUTOCOMPLETADO ---
+onValue(ref(db, 'moulin/clientes'), (snapshot) => {
+    const data = snapshot.val();
+    // Guardamos los clientes en una variable global para que el buscador los encuentre
+    window.clientes = data ? Object.values(data) : [];
+    
+    // Llenamos el datalist del HTML para que aparezcan las sugerencias al escribir
+    const listaDL = document.getElementById('lista_clientes');
+    if(listaDL) {
+        listaDL.innerHTML = window.clientes
+            .map(c => `<option value="${c.nombre}">`)
+            .join('');
+    }
+});
+
+// --- 2.2 LÓGICA DE AUTOCOMPLETADO TOTAL (SALTO DE BLOQUE) ---
+const configurarAutocompletado = (idInput, prefijo) => {
+    const input = document.getElementById(idInput);
+    if (!input) return;
+
+    input.addEventListener('change', (e) => {
+        const nombreSel = e.target.value;
+        // Buscamos el cliente exacto
+        const cliente = window.clientes.find(c => c.nombre === nombreSel);
+        
+        if (cliente) {
+            // Llenamos todos los campos del bloque de una sola vez
+            document.getElementById(`${prefijo}_d`).value = cliente.direccion || '';
+            document.getElementById(`${prefijo}_l`).value = cliente.localidad || '';
+            document.getElementById(`${prefijo}_t`).value = cliente.telefono || '';
+            document.getElementById(`${prefijo}_cbu`).value = cliente.cbu || '';
+            
+            console.log(`Sistema: Datos de ${prefijo === 'r' ? 'Remitente' : 'Destinatario'} cargados.`);
+        }
+    });
+};
+
+// Activamos la función para los dos formularios
+configurarAutocompletado('r_n', 'r');
+configurarAutocompletado('d_n', 'd');
 
 onValue(ref(db, 'moulin/guias'), (snapshot) => {
     const data = snapshot.val();
@@ -164,4 +204,5 @@ function renderHistorial() {
 }
 
 // Iniciar con una fila
+
 agregarFila();
