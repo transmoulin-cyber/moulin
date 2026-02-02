@@ -147,7 +147,7 @@ document.getElementById('btn-emitir').onclick = async () => {
     setTimeout(() => location.reload(), 1000);
 };
 
-// 6. MOTOR DE IMPRESIÓN Y REIMPRESIÓN
+// 6. MOTOR DE IMPRESIÓN Y REIMPRESIÓN (Versión con tamaños fijos)
 window.reimprimirGuia = (num) => {
     const guia = historialGlobal.find(g => g.num === num);
     if (guia) {
@@ -158,22 +158,21 @@ window.reimprimirGuia = (num) => {
 };
 
 function imprimirTresHojas(g) {
-    // Si la guía viene del historial viejo, los items pueden llamarse distinto
     let itemsH = g.items.map(i => `
         <tr>
-            <td align="center">${i.c || i.cant}</td>
-            <td>${i.t || i.tipo}</td>
-            <td>${i.d || i.det}</td>
-            <td align="right">$${i.u || i.unit || 0}</td>
-            <td align="right">$${i.vd || i.v_decl || 0}</td>
+            <td align="center" style="border: 1px solid #000; padding: 4px;">${i.c || i.cant}</td>
+            <td style="border: 1px solid #000; padding: 4px;">${i.t || i.tipo}</td>
+            <td style="border: 1px solid #000; padding: 4px;">${i.d || i.det}</td>
+            <td align="right" style="border: 1px solid #000; padding: 4px;">$${i.u || i.unit || 0}</td>
+            <td align="right" style="border: 1px solid #000; padding: 4px;">$${i.vd || i.v_decl || 0}</td>
         </tr>`).join('');
 
     let html = "";
     ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit) => {
         html += `
-        <div class="cupon">
-            <div class="header-print">
-                <img src="logo.png" class="logo-print" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
+        <div style="height: 11cm; border: 1px solid #000; padding: 12px; display: flex; flex-direction: column; overflow: hidden; font-size: 13px; margin-bottom: 0.3cm; line-height: 1.3; font-family: sans-serif;">
+            <div style="display: flex; align-items: center; border-bottom: 2px solid #000; padding-bottom: 5px;">
+                <img src="logo.png" style="height: 45px; width: auto;" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
                 <b style="font-size:18px; margin-left:10px;">TRANSPORTE MOULIN</b>
                 <div style="margin-left:auto; text-align:right;">
                     <small>${tit}</small><br>
@@ -186,42 +185,44 @@ function imprimirTresHojas(g) {
                     <b>REMITENTE:</b> ${g.r_n}<br>
                     Dir: ${g.r_d || ''}<br>
                     Tel: ${g.r_t || ''}<br>
-                    Loc: <span class="resaltado">${g.r_l || ''}</span>
+                    Loc: <span style="background: #eee !important; font-weight: bold; padding: 0 4px; border: 1px solid #ccc;">${g.r_l || ''}</span>
                 </div>
                 <div style="padding-left:8px;">
                     <b>DESTINATARIO:</b> ${g.d_n}<br>
                     Dir: ${g.d_d || ''}<br>
                     Tel: ${g.d_t || ''}<br>
-                    Loc: <span class="resaltado">${g.d_l || ''}</span>
+                    Loc: <span style="background: #eee !important; font-weight: bold; padding: 0 4px; border: 1px solid #ccc;">${g.d_l || ''}</span>
                 </div>
             </div>
-            <table class="tabla-items-print">
-                <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th><th>V.Decl</th></tr></thead>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin: 5px 0;">
+                <thead><tr style="background:#eee;"><th style="border: 1px solid #000;">Cant</th><th style="border: 1px solid #000;">Tipo</th><th style="border: 1px solid #000;">Detalle</th><th style="border: 1px solid #000;">Unit</th><th style="border: 1px solid #000;">V.Decl</th></tr></thead>
                 <tbody>${itemsH}</tbody>
             </table>
             <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold;">
-                <div>BULTOS: ${g.cant_t || g.items.length} | ${g.condicion} | <span class="resaltado">${g.pago_en}</span></div>
+                <div>BULTOS: ${g.cant_t || g.items.length} | ${g.condicion || ''} | <span style="background: #eee !important; font-weight: bold; padding: 0 4px; border: 1px solid #ccc;">${g.pago_en}</span></div>
                 <div style="text-align:right;">Flete: $${g.flete || 0} | Seg: $${g.seg || 0} | <span style="font-size:18px;">TOTAL: $${g.total}</span></div>
             </div>
         </div>`;
     });
 
     html += `
-    <div class="etiqueta">
-        <div style="width:33%;"><small>DESTINO:</small><br><b>${g.d_n}</b><br><span>${g.d_d || ''}</span><br><b class="resaltado">${g.d_l || ''}</b></div>
-        <div style="width:33%; text-align:center;"><div id="qr_etiqueta" style="margin:auto; width:70px;"></div><b>${g.num}</b></div>
-        <div style="width:33%; text-align:right;"><small>ORIGEN:</small><br><b>${g.r_n}</b><br><b class="resaltado">${g.r_l || ''}</b><br><div class="bultos-box">BULTOS: ${g.cant_t || g.items.length}</div></div>
+    <div style="height: 4cm; border: 2px dashed #000; padding: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-family: sans-serif;">
+        <div style="width:33%;"><small>DESTINO:</small><br><b>${g.d_n}</b><br><span>${g.d_d || ''}</span><br><b style="background: #eee !important; font-weight: bold; padding: 0 4px; border: 1px solid #ccc;">${g.d_l || ''}</b></div>
+        <div style="width:33%; text-align:center;"><div id="qr_etiqueta" style="margin:auto; width:70px; height:70px;"></div><b>${g.num}</b></div>
+        <div style="width:33%; text-align:right;"><small>ORIGEN:</small><br><b>${g.r_n}</b><br><b style="background: #eee !important; font-weight: bold; padding: 0 4px; border: 1px solid #ccc;">${g.r_l || ''}</b><br><div style="border: 2px solid #000; padding: 2px 8px; font-weight: bold; font-size: 15px; margin-top: 5px; display: inline-block;">BULTOS: ${g.cant_t || g.items.length}</div></div>
     </div>`;
 
     const win = window.open('', '_blank');
-    win.document.write(`<html><head><link rel="stylesheet" href="estilos-moulin.css"><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
+    win.document.write(`<html><head><title>Imprimir ${g.num}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    </head><body style="margin:0; padding:0;">
     <div id="seccion-impresion">${html}</div>
     <script>
         setTimeout(()=>{ 
             new QRCode(document.getElementById("qr_etiqueta"),{text:"${g.num}",width:70,height:70}); 
             window.print(); 
-            setTimeout(()=>window.close(),500); 
-        },600);
+            setTimeout(()=>window.close(), 500); 
+        }, 600);
     </script>
     </body></html>`);
     win.document.close();
@@ -277,3 +278,4 @@ function renderTablaClientes() {
         </tr>
     `).join('');
 }
+
