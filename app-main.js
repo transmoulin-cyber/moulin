@@ -58,25 +58,31 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
     renderHistorial();
 });
 
-// 3. MOTOR DE AUTOCOMPLETADO
+// 3. MOTOR DE AUTOCOMPLETADO (Diccionario Moulin V8.7)
 const ejecutarAutocompletado = (idInput, prefijo) => {
     const input = document.getElementById(idInput);
     if (!input) return;
     input.addEventListener('change', (e) => {
+        // Buscamos al cliente en la lista global
         const cliente = window.clientesGlobales.find(c => c.nombre === e.target.value);
+        
         if (cliente) {
-           // El "Traductor Mudo": Mapea nombres nuevos vs viejos
+            // El Traductor Mudo ahora conoce las letras del sistema anterior
             const datosMap = {
-                d: cliente.direccion || cliente.dir || cliente.r_d || '',
-                l: cliente.localidad || cliente.loc || cliente.r_l || '',
-                t: cliente.telefono  || cliente.tel || cliente.r_t || '',
+                d: cliente.direccion || cliente.d || '', // d es el nombre en sistema.html
+                l: cliente.localidad || cliente.l || '', // l es el nombre en sistema.html
+                t: cliente.telefono  || cliente.t || '', // t es el nombre en sistema.html
                 cbu: cliente.cbu || ''
             };
 
-            // Rellena los campos usando el mapa traducido
+            // Rellenamos los campos del formulario
             Object.keys(datosMap).forEach(key => {
                 const el = document.getElementById(`${prefijo}_${key}`);
-                if(el) el.value = datosMap[key];
+                if(el) {
+                    const valor = datosMap[key];
+                    // Si el valor es accidentalmente un objeto o undefined, lo limpiamos
+                    el.value = (valor && typeof valor !== 'object') ? valor : '';
+                }
             });
         }
     });
@@ -246,4 +252,5 @@ window.eliminarCliente = (nombre) => {
 };
 
 agregarFila();
+
 
