@@ -172,21 +172,96 @@ document.getElementById('btn-emitir').onclick = async () => {
 };
 
 function imprimirTresHojas(g) {
-    let totalBultos = g.items.reduce((acc, item) => acc + parseInt(item.cant), 0);
-    let etiquetas = "";
-    for(let i=1; i<=totalBultos; i++) {
-        etiquetas += `<div class="etiqueta"><h2>MOULIN</h2><p>GUÍA: ${g.num}</p><p>DESTINO: ${g.d_l}</p><p>Bulto ${i} de ${totalBultos}</p></div>`;
-    }
+    // 1. Preparar los items para la tabla
+    let itemsH = g.items.map(i => `
+        <tr>
+            <td align="center">${i.cant || i.c}</td>
+            <td>${i.tipo || i.t}</td>
+            <td>${i.det || i.d}</td>
+            <td align="right">$${i.unit || i.u || 0}</td>
+            <td align="right">$${i.v_decl || i.vd || 0}</td>
+        </tr>`).join('');
+
+    let html = "";
+    const logoPath = "logo.png";
+    
+    // 2. Generar Original y Duplicado (Tus cuadros negros)
+    ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit) => {
+        html += `
+        <div class="cupon">
+            <div class="header-print">
+                <img src="${logoPath}" class="logo-print" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
+                <b style="font-size:18px; margin-left:10px;">TRANSPORTE MOULIN</b>
+                <div style="margin-left:auto; text-align:right;">
+                    <small>${tit}</small><br>
+                    <b style="font-size:22px; color:red;">${g.num}</b><br>
+                    <b>${g.fecha}</b>
+                </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:8px 0; padding:8px; line-height:1.4;">
+                <div style="border-right:1px solid #000; padding-right:8px;">
+                    <b style="font-size:14px;">REMITENTE:</b> ${g.r_n}<br>
+                    Dir: ${g.r_d || ''}<br>
+                    Tel: ${g.r_t || ''} | CBU: ${g.r_cbu || ''}<br>
+                    Loc: <span class="resaltado">${g.r_l || ''}</span>
+                </div>
+                <div style="padding-left:8px;">
+                    <b style="font-size:14px;">DESTINATARIO:</b> ${g.d_n}<br>
+                    Dir: ${g.d_d || ''}<br>
+                    Tel: ${g.d_t || ''} | CBU: ${g.d_cbu || ''}<br>
+                    Loc: <span class="resaltado">${g.d_l || ''}</span>
+                </div>
+            </div>
+            <table class="tabla-items-print">
+                <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th><th>V.Decl</th></tr></thead>
+                <tbody>${itemsH}</tbody>
+            </table>
+            <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold; font-size:14px;">
+                <div>BULTOS: ${g.cant_t || g.items.length} | ${g.condicion} | <span class="resaltado">${g.pago_en}</span></div>
+                <div style="text-align:right;">Flete: $${g.flete || 0} | Seg: $${g.seg || 0} | <span style="font-size:18px;">TOTAL: $${g.total}</span></div>
+            </div>
+            <div style="margin-top:auto; text-align:right;">
+                <div style="border-top:1px solid #000; width:200px; text-align:center; margin-left:auto; font-size:11px;">Firma y Aclaración Receptor</div>
+            </div>
+        </div>`;
+    });
+
+    // 3. Etiqueta con QR
+    html += `
+    <div class="etiqueta">
+        <div style="width:33%; line-height:1.1;">
+            <small>DESTINO:</small><br>
+            <b style="font-size:15px;">${g.d_n}</b><br>
+            <span style="font-size:12px;">${g.d_d || ''}</span><br>
+            <b class="resaltado" style="font-size:15px;">${g.d_l || ''}</b>
+        </div>
+        <div style="width:33%; display:flex; flex-direction:column; align-items:center;">
+            <div id="qr_etiqueta" style="width:70px; height:70px;"></div>
+            <b style="font-size:14px; margin-top:3px;">${g.num}</b>
+        </div>
+        <div style="width:33%; text-align:right; line-height:1.1;">
+            <small>ORIGEN:</small><br>
+            <b style="font-size:13px;">${g.r_n}</b><br>
+            <b class="resaltado">${g.r_l || ''}</b><br>
+            <div class="bultos-box">BULTOS: ${g.cant_t || g.items.length}</div>
+        </div>
+    </div>`;
+
+    // 4. Inyectar y disparar impresión
     const win = window.open('', '_blank');
-    win.document.write(`<html><head><link rel="stylesheet" href="estilos-moulin.css"></head><body>
-        <div class="hoja-imp"><h1>COPIA REMITENTE</h1><p>Guía: ${g.num}</p><p>De: ${g.r_n}</p><p>Para: ${g.d_n}</p><p>Total: $${g.total}</p></div>
-        <div class="page-break"></div>
-        <div class="hoja-imp"><h1>COPIA DESTINATARIO</h1><p>Guía: ${g.num}</p><p>CONTRA REEMBOLSO: $${g.cr_monto}</p></div>
-        <div class="page-break"></div>
-        <div class="hoja-etiquetas">${etiquetas}</div>
+    win.document.write(`<html><head><link rel="stylesheet" href="estilos-moulin.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    </head><body>
+    <div id="seccion-impresion">${html}</div>
+    <script>
+        setTimeout(() => {
+            new QRCode(document.getElementById("qr_etiqueta"), { text: "${g.num}", width: 70, height: 70 });
+            window.print();
+            setTimeout(() => window.close(), 500);
+        }, 500);
+    </script>
     </body></html>`);
     win.document.close();
-    win.print();
 }
 
 // 6. FUNCIONES DE RETIROS
@@ -252,5 +327,6 @@ window.eliminarCliente = (nombre) => {
 };
 
 agregarFila();
+
 
 
