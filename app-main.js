@@ -22,10 +22,9 @@ const NOMBRE_OP = sesion?.nombre || "Operador";
 let proximoNumero = 1001;
 let historialGlobal = [];
 let retirosGlobal = [];
-window.clientesGlobales = []; // Base de datos unificada
+window.clientesGlobales = []; 
 
 // 2. ESCUCHAS EN TIEMPO REAL
-// --- Clientes (Unificados para todas las sucursales) ---
 onValue(ref(db, 'moulin/clientes'), (snapshot) => {
     const data = snapshot.val();
     window.clientesGlobales = data ? Object.values(data) : [];
@@ -33,28 +32,23 @@ onValue(ref(db, 'moulin/clientes'), (snapshot) => {
     if(listaDL) {
         listaDL.innerHTML = window.clientesGlobales.map(c => `<option value="${c.nombre}">`).join('');
     }
+    renderTablaClientes(); // <--- ESTO ACTIVA LA TABLA
 });
 
-// --- Retiros (Filtrados por Sucursal) ---
 onValue(ref(db, 'moulin/retiros'), (snapshot) => {
     const data = snapshot.val();
     retirosGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, id})) : [];
     renderRetiros();
 });
 
-// --- Guías e Historial (FILTRO DE SEGURIDAD POR SUCURSAL) ---
 onValue(ref(db, 'moulin/guias'), (snapshot) => {
     const data = snapshot.val();
     const todas = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
-    
-    // El administrativo solo ve las guías de su prefijo
     if (PREFIJO_BASE !== "TODO" && PREFIJO_BASE !== "ADM") {
         historialGlobal = todas.filter(g => g.num.startsWith(PREFIJO));
     } else {
         historialGlobal = todas;
     }
-    
-    // Cálculo del próximo número basado en su prefijo
     const misGuias = todas.filter(g => g.num.startsWith(PREFIJO));
     if (misGuias.length > 0) {
         const nros = misGuias.map(g => parseInt(g.num.split('-')[1]) || 0);
@@ -64,18 +58,19 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
     renderHistorial();
 });
 
-// 3. MOTOR DE AUTOCOMPLETADO (Universal)
+// 3. MOTOR DE AUTOCOMPLETADO
 const ejecutarAutocompletado = (idInput, prefijo) => {
     const input = document.getElementById(idInput);
     if (!input) return;
     input.addEventListener('change', (e) => {
         const cliente = window.clientesGlobales.find(c => c.nombre === e.target.value);
         if (cliente) {
-            // Rellena todos los campos del bloque (r o d)
             const campos = ['d', 'l', 't', 'cbu'];
             campos.forEach(c => {
                 const el = document.getElementById(`${prefijo}_${c}`);
-                if(el) el.value = cliente[c === 'd' ? 'direccion' : c === 'l' ? 'localidad' : c === 't' ? 'telefono' : 'cbu'] || '';
+                const valorDB = cliente[c === 'd' ? 'direccion' : c === 'l' ? 'localidad' : c === 't' ? 'telefono' : 'cbu'] 
+                                || cliente[c === 'd' ? 'dir' : c === 'l' ? 'loc' : c === 't' ? 'tel' : 'cbu']; // <--- TRADUCTOR SIMPLE
+                if(el) el.value = valorDB || '';
             });
         }
     });
@@ -127,7 +122,6 @@ function calcularTotales() {
 document.getElementById('btn-emitir').onclick = async () => {
     const totales = calcularTotales();
     const cr_activo = document.getElementById('cr_activo').value;
-    
     const guia = {
         num: `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`,
         fecha: new Date().toLocaleDateString(),
@@ -146,12 +140,9 @@ document.getElementById('btn-emitir').onclick = async () => {
     };
 
     if(!guia.r_n || !guia.d_n) return alert("Faltan datos de clientes.");
-
     await set(ref(db, `moulin/guias/${Date.now()}`), guia);
-    // Guardar/Actualizar cliente en base global automáticamente
     const clienteNuevo = { nombre: guia.d_n, direccion: guia.d_d, localidad: guia.d_l, telefono: guia.d_t, cbu: guia.d_cbu };
     set(ref(db, `moulin/clientes/${guia.d_n.replace(/[.#$/[\]]/g, "")}`), clienteNuevo);
-
     imprimirTresHojas(guia);
     location.reload();
 };
@@ -192,6 +183,7 @@ window.convertirAGuia = (id) => {
 
 function renderRetiros() {
     const div = document.getElementById('listaRetiros');
+    if(!div) return;
     const pends = retirosGlobal.filter(r => r.estado === 'pendiente' && (PREFIJO_BASE === "TODO" || r.sucursal_retiro === PREFIJO));
     div.innerHTML = pends.map(r => `
         <div class="card-retiro">
@@ -212,5 +204,35 @@ function renderHistorial() {
         `).join('');
     }
 }
+
+function renderTablaClientes() {
+    const tbody = document.getElementById('cuerpoTablaClientes');
+    if(!tbody) return;
+    const badge = document.getElementById('badge-clientes');
+    if(badge) badge.innerText = window.clientesGlobales.length;
+
+    tbody.innerHTML = window.clientesGlobales.map(c => {
+        const d = c.direccion || c.dir || '<span style="color:red">Falta</span>';
+        const l = c.localidad || c.loc || '-';
+        const t = c.telefono || c.tel || '-';
+        const cb = c.cbu || '-';
+        return `
+            <tr>
+                <td><b>${c.nombre}</b></td>
+                <td>${d}</td>
+                <td>${l}</td>
+                <td>${t}</td>
+                <td>${cb}</td>
+                <td><button onclick="eliminarCliente('${c.nombre}')" style="background:var(--rojo); color:white; border:none; padding:5px; border-radius:3px; cursor:pointer;">Borrar</button></td>
+            </tr>`;
+    }).join('');
+}
+
+window.eliminarCliente = (nombre) => {
+    if(confirm(`¿Estás seguro de borrar a ${nombre}?`)) {
+        const idLimpio = nombre.replace(/[.#$/[\]]/g, "");
+        set(ref(db, `moulin/clientes/${idLimpio}`), null);
+    }
+};
 
 agregarFila();
