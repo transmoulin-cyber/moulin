@@ -59,37 +59,72 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
 });
 
 // 3. MOTOR DE AUTOCOMPLETADO (Diccionario Moulin V8.7)
-const ejecutarAutocompletado = (idInput, prefijo) => {
-    const input = document.getElementById(idInput);
-    if (!input) return;
-    input.addEventListener('change', (e) => {
-        // Buscamos al cliente en la lista global
-        const cliente = window.clientesGlobales.find(c => c.nombre === e.target.value);
+//  LÓGICA DE EMISIÓN (Guardar y Mandar a Imprimir)
+document.getElementById('btn-emitir').addEventListener('click', async () => {
+    const r_n = document.getElementById('r_n').value.trim();
+    const d_n = document.getElementById('d_n').value.trim();
+
+    if (!r_n || !d_n) {
+        alert("Por favor, completa los nombres de Remitente y Destinatario");
+        return;
+    }
+
+    // Calculamos totales antes de guardar para tener los números listos
+    const tot = calcularTotales(); 
+
+    const guia = {
+        num: document.getElementById('display-guia').innerText,
+        fecha: new Date().toLocaleDateString(),
+        // Datos del Remitente
+        r_n: r_n,
+        r_d: document.getElementById('r_d').value,
+        r_l: document.getElementById('r_l').value,
+        r_t: document.getElementById('r_t').value,
+        r_cbu: document.getElementById('r_cbu').value,
+        // Datos del Destinatario
+        d_n: d_n,
+        d_d: document.getElementById('d_d').value,
+        r_l: document.getElementById('d_l').value, // Aquí se mapea a la localidad
+        d_l: document.getElementById('d_l').value,
+        d_t: document.getElementById('d_t').value,
+        d_cbu: document.getElementById('d_cbu').value,
+        // Totales (Lo que la impresora busca)
+        flete: tot.flete.toFixed(2),
+        seg: tot.seg.toFixed(2),
+        total: tot.total.toFixed(2),
+        v_decl: tot.v_decl.toFixed(2),
+        cant_t: tot.cant_t,
+        // Otros datos
+        pago_en: document.getElementById('pago_en').value,
+        condicion: document.getElementById('condicion').value,
+        estado: 'recibido',
+        items: Array.from(document.querySelectorAll('#contenedor-items .item-fila')).map(fila => ({
+            c: fila.querySelector('.i-cant').value,
+            t: fila.querySelector('.i-tipo').value,
+            d: fila.querySelector('.i-det').value,
+            u: fila.querySelector('.i-unit').value,
+            vd: fila.querySelector('.i-decl').value
+        }))
+    };
+
+    try {
+        const nuevaGuiaRef = push(ref(db, 'moulin/guias'));
+        await set(nuevaGuiaRef, guia);
         
-        if (cliente) {
-            // El Traductor Mudo ahora conoce las letras del sistema anterior
-            const datosMap = {
-                d: cliente.direccion || cliente.d || '', // d es el nombre en sistema.html
-                l: cliente.localidad || cliente.l || '', // l es el nombre en sistema.html
-                t: cliente.telefono  || cliente.t || '', // t es el nombre en sistema.html
-                cbu: cliente.cbu || ''
-            };
+        // AGREGAR: Guardado automático de clientes para que no falle la próxima vez
+        await guardarClienteAutomatico('r');
+        await guardarClienteAutomatico('d');
 
-            // Rellenamos los campos del formulario
-            Object.keys(datosMap).forEach(key => {
-                const el = document.getElementById(`${prefijo}_${key}`);
-                if(el) {
-                    const valor = datosMap[key];
-                    // Si el valor es accidentalmente un objeto o undefined, lo limpiamos
-                    el.value = (valor && typeof valor !== 'object') ? valor : '';
-                }
-            });
-        }
-    });
-};
-ejecutarAutocompletado('r_n', 'r');
-ejecutarAutocompletado('d_n', 'd');
+        // Llamamos a la impresora profesional que pegamos antes
+        imprimirTresHojas(guia); 
 
+        alert("Guía emitida con éxito");
+        location.reload(); 
+    } catch (error) {
+        console.error("Error al emitir:", error);
+        alert("Error al guardar la guía");
+    }
+});
 // 4. LÓGICA DE INTERFAZ
 document.querySelectorAll('.nav-tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -327,6 +362,7 @@ window.eliminarCliente = (nombre) => {
 };
 
 agregarFila();
+
 
 
 
