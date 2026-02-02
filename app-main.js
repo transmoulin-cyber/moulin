@@ -128,6 +128,7 @@ function calcularTotales() {
 document.getElementById('btn-emitir').onclick = async () => {
     const totales = calcularTotales();
     const cr_activo = document.getElementById('cr_activo').value;
+    
     const guia = {
         num: `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`,
         fecha: new Date().toLocaleDateString(),
@@ -146,27 +147,23 @@ document.getElementById('btn-emitir').onclick = async () => {
     };
 
     if(!guia.r_n || !guia.d_n) return alert("Faltan datos de clientes.");
+
     await set(ref(db, `moulin/guias/${Date.now()}`), guia);
- // FUNCIÓN DE GUARDADO UNIVERSAL (Actualiza la ficha de cualquier cliente)
+
+    // FUNCIÓN DE GUARDADO UNIVERSAL
     const guardarFicha = (nom, dir, loc, tel, cbu) => {
         if(!nom) return;
         const idLimpio = nom.replace(/[.#$/[\]]/g, "");
-        const ficha = { 
-            nombre: nom, 
-            direccion: dir, 
-            localidad: loc, 
-            telefono: tel, 
-            cbu: cbu 
-        };
+        const ficha = { nombre: nom, direccion: dir, localidad: loc, telefono: tel, cbu: cbu };
         set(ref(db, `moulin/clientes/${idLimpio}`), ficha);
     };
 
-    // Guardamos a los dos: Remitente y Destinatario
     guardarFicha(guia.r_n, guia.r_d, guia.r_l, guia.r_t, guia.r_cbu);
     guardarFicha(guia.d_n, guia.d_d, guia.d_l, guia.d_t, guia.d_cbu);
 
     imprimirTresHojas(guia);
     location.reload();
+};
 
 function imprimirTresHojas(g) {
     let totalBultos = g.items.reduce((acc, item) => acc + parseInt(item.cant), 0);
@@ -237,15 +234,7 @@ function renderTablaClientes() {
         const l = c.localidad || c.loc || '-';
         const t = c.telefono || c.tel || '-';
         const cb = c.cbu || '-';
-        return `
-            <tr>
-                <td><b>${c.nombre}</b></td>
-                <td>${d}</td>
-                <td>${l}</td>
-                <td>${t}</td>
-                <td>${cb}</td>
-                <td><button onclick="eliminarCliente('${c.nombre}')" style="background:var(--rojo); color:white; border:none; padding:5px; border-radius:3px; cursor:pointer;">Borrar</button></td>
-            </tr>`;
+        return `<tr><td><b>${c.nombre}</b></td><td>${d}</td><td>${l}</td><td>${t}</td><td>${cb}</td><td><button onclick="eliminarCliente('${c.nombre}')" style="background:var(--rojo); color:white; border:none; padding:5px; border-radius:3px; cursor:pointer;">Borrar</button></td></tr>`;
     }).join('');
 }
 
