@@ -15,11 +15,12 @@
 <body>
     <datalist id="lista_clientes"></datalist>
 
-    <nav class="nav-tabs no-print">
+<nav class="nav-tabs no-print">
         <button id="btn-guia" class="active" data-tab="tab-guia">📦 EMITIR GUÍA</button>
         <button id="btn-retiros" data-tab="tab-retiros">📝 RETIROS <span id="badge-retiros" class="badge" style="display:none">0</span></button>
+        <button id="btn-clientes" data-tab="tab-clientes">👥 CLIENTES <span id="badge-clientes" class="badge">0</span></button>
     </nav>
-
+    
     <main id="tab-guia" class="tab-content active no-print">
         <div class="hoja">
             <header class="header-guia">
@@ -123,6 +124,31 @@
     </footer>
 
     <div id="seccion-impresion"></div>
+    <button data-tab="tab-clientes">BASE CLIENTES <span id="badge-clientes" class="badge">0</span></button>
+
+<div id="tab-clientes" class="tab-content">
+    <div class="hoja">
+        <h3>Gestión de Base de Datos de Clientes</h3>
+        <p>Aquí podés ver cómo están guardados los datos en Firebase y detectar errores.</p>
+        <div style="overflow-x: auto;">
+            <table class="tabla-items">
+                <thead>
+                    <tr>
+                        <th>Nombre (ID)</th>
+                        <th>Dirección</th>
+                        <th>Localidad</th>
+                        <th>Teléfono</th>
+                        <th>CBU</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="cuerpoTablaClientes">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 </body>
 </html>
+
 
