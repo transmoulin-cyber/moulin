@@ -65,12 +65,18 @@ const ejecutarAutocompletado = (idInput, prefijo) => {
     input.addEventListener('change', (e) => {
         const cliente = window.clientesGlobales.find(c => c.nombre === e.target.value);
         if (cliente) {
-            const campos = ['d', 'l', 't', 'cbu'];
-            campos.forEach(c => {
-                const el = document.getElementById(`${prefijo}_${c}`);
-                const valorDB = cliente[c === 'd' ? 'direccion' : c === 'l' ? 'localidad' : c === 't' ? 'telefono' : 'cbu'] 
-                                || cliente[c === 'd' ? 'dir' : c === 'l' ? 'loc' : c === 't' ? 'tel' : 'cbu']; // <--- TRADUCTOR SIMPLE
-                if(el) el.value = valorDB || '';
+           // El "Traductor Mudo": Mapea nombres nuevos vs viejos
+            const datosMap = {
+                d: cliente.direccion || cliente.dir || cliente.r_d || '',
+                l: cliente.localidad || cliente.loc || cliente.r_l || '',
+                t: cliente.telefono  || cliente.tel || cliente.r_t || '',
+                cbu: cliente.cbu || ''
+            };
+
+            // Rellena los campos usando el mapa traducido
+            Object.keys(datosMap).forEach(key => {
+                const el = document.getElementById(`${prefijo}_${key}`);
+                if(el) el.value = datosMap[key];
             });
         }
     });
@@ -141,11 +147,26 @@ document.getElementById('btn-emitir').onclick = async () => {
 
     if(!guia.r_n || !guia.d_n) return alert("Faltan datos de clientes.");
     await set(ref(db, `moulin/guias/${Date.now()}`), guia);
-    const clienteNuevo = { nombre: guia.d_n, direccion: guia.d_d, localidad: guia.d_l, telefono: guia.d_t, cbu: guia.d_cbu };
-    set(ref(db, `moulin/clientes/${guia.d_n.replace(/[.#$/[\]]/g, "")}`), clienteNuevo);
+ // FUNCIÓN DE GUARDADO UNIVERSAL (Actualiza la ficha de cualquier cliente)
+    const guardarFicha = (nom, dir, loc, tel, cbu) => {
+        if(!nom) return;
+        const idLimpio = nom.replace(/[.#$/[\]]/g, "");
+        const ficha = { 
+            nombre: nom, 
+            direccion: dir, 
+            localidad: loc, 
+            telefono: tel, 
+            cbu: cbu 
+        };
+        set(ref(db, `moulin/clientes/${idLimpio}`), ficha);
+    };
+
+    // Guardamos a los dos: Remitente y Destinatario
+    guardarFicha(guia.r_n, guia.r_d, guia.r_l, guia.r_t, guia.r_cbu);
+    guardarFicha(guia.d_n, guia.d_d, guia.d_l, guia.d_t, guia.d_cbu);
+
     imprimirTresHojas(guia);
     location.reload();
-};
 
 function imprimirTresHojas(g) {
     let totalBultos = g.items.reduce((acc, item) => acc + parseInt(item.cant), 0);
@@ -236,3 +257,4 @@ window.eliminarCliente = (nombre) => {
 };
 
 agregarFila();
+
