@@ -238,14 +238,42 @@ document.querySelectorAll('.nav-tabs button').forEach(btn => {
 document.getElementById('add-item').addEventListener('click', agregarFila);
 window.onload = () => { if(!document.getElementById('cuerpoItems').innerHTML) agregarFila(); };
 
-// Render Historial y Clientes (simplificado)
+// Render Historial y Clientes (Versión Funcional)
 function renderHistorial() {
     const tbody = document.getElementById('listaHistorial');
-    if(tbody) tbody.innerHTML = historialGlobal.slice(0,15).map(g => `<tr><td>${g.num}</td><td>${g.fecha}</td><td>${g.d_l}</td><td>$${g.total}</td><td>🖨️</td></tr>`).join('');
+    if(tbody) {
+        tbody.innerHTML = historialGlobal.slice(0,20).map(g => `
+            <tr>
+                <td><b>${g.num}</b></td>
+                <td>${g.fecha}</td>
+                <td>${g.d_l || '-'}</td>
+                <td>$${g.total}</td>
+                <td style="text-align:center;">
+                    <button onclick="reimprimirGuia('${g.num}')" style="cursor:pointer; background:none; border:none; font-size:18px;" title="Reimprimir">
+                        🖨️
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
 }
 
 function renderTablaClientes() {
     const tbody = document.getElementById('cuerpoTablaClientes');
-    if(tbody) tbody.innerHTML = window.clientesGlobales.slice(0,20).map(c => `<tr><td><b>${c.nombre||c.n}</b></td><td>${c.direccion||c.d||'-'}</td><td>${c.localidad||c.l||'-'}</td><td>${c.telefono||c.t||'-'}</td><td><button onclick="eliminarCliente('${c.nombre||c.n}')">Borrar</button></td></tr>`).join('');
+    if(!tbody) return;
+    
+    tbody.innerHTML = window.clientesGlobales.slice(0,30).map(c => `
+        <tr>
+            <td><b>${c.nombre || c.n}</b></td>
+            <td>${c.direccion || c.dir || c.d || '-'}</td>
+            <td>${c.localidad || c.loc || c.l || '-'}</td>
+            <td>${c.telefono || c.tel || c.t || '-'}</td>
+            <td>
+                <button onclick="eliminarCliente('${(c.nombre || c.n).replace(/'/g, "\\'")}')" 
+                        style="background:#ff4444; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">
+                    Borrar
+                </button>
+            </td>
+        </tr>
+    `).join('');
 }
-
