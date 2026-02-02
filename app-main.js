@@ -147,9 +147,27 @@ document.getElementById('btn-emitir').onclick = async () => {
     setTimeout(() => location.reload(), 1000);
 };
 
-// 6. IMPRESORA PROFESIONAL
+// 6. MOTOR DE IMPRESIÓN Y REIMPRESIÓN
+window.reimprimirGuia = (num) => {
+    const guia = historialGlobal.find(g => g.num === num);
+    if (guia) {
+        imprimirTresHojas(guia);
+    } else {
+        alert("No se encontró la información de la guía en el historial.");
+    }
+};
+
 function imprimirTresHojas(g) {
-    let itemsH = g.items.map(i => `<tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d}</td><td align="right">$${i.u}</td><td align="right">$${i.vd}</td></tr>`).join('');
+    // Si la guía viene del historial viejo, los items pueden llamarse distinto
+    let itemsH = g.items.map(i => `
+        <tr>
+            <td align="center">${i.c || i.cant}</td>
+            <td>${i.t || i.tipo}</td>
+            <td>${i.d || i.det}</td>
+            <td align="right">$${i.u || i.unit || 0}</td>
+            <td align="right">$${i.vd || i.v_decl || 0}</td>
+        </tr>`).join('');
+
     let html = "";
     ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit) => {
         html += `
@@ -157,37 +175,57 @@ function imprimirTresHojas(g) {
             <div class="header-print">
                 <img src="logo.png" class="logo-print" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
                 <b style="font-size:18px; margin-left:10px;">TRANSPORTE MOULIN</b>
-                <div style="margin-left:auto; text-align:right;"><small>${tit}</small><br><b style="font-size:22px; color:red;">${g.num}</b><br><b>${g.fecha}</b></div>
+                <div style="margin-left:auto; text-align:right;">
+                    <small>${tit}</small><br>
+                    <b style="font-size:22px; color:red;">${g.num}</b><br>
+                    <b>${g.fecha}</b>
+                </div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:8px 0; padding:8px; line-height:1.4;">
-                <div style="border-right:1px solid #000; padding-right:8px;"><b>REMITENTE:</b> ${g.r_n}<br>Dir: ${g.r_d}<br>Tel: ${g.r_t}<br>Loc: <span class="resaltado">${g.r_l}</span></div>
-                <div style="padding-left:8px;"><b>DESTINATARIO:</b> ${g.d_n}<br>Dir: ${g.d_d}<br>Tel: ${g.d_t}<br>Loc: <span class="resaltado">${g.d_l}</span></div>
+                <div style="border-right:1px solid #000; padding-right:8px;">
+                    <b>REMITENTE:</b> ${g.r_n}<br>
+                    Dir: ${g.r_d || ''}<br>
+                    Tel: ${g.r_t || ''}<br>
+                    Loc: <span class="resaltado">${g.r_l || ''}</span>
+                </div>
+                <div style="padding-left:8px;">
+                    <b>DESTINATARIO:</b> ${g.d_n}<br>
+                    Dir: ${g.d_d || ''}<br>
+                    Tel: ${g.d_t || ''}<br>
+                    Loc: <span class="resaltado">${g.d_l || ''}</span>
+                </div>
             </div>
             <table class="tabla-items-print">
                 <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th><th>V.Decl</th></tr></thead>
                 <tbody>${itemsH}</tbody>
             </table>
             <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold;">
-                <div>BULTOS: ${g.cant_t} | ${g.condicion} | <span class="resaltado">${g.pago_en}</span></div>
-                <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | <span style="font-size:18px;">TOTAL: $${g.total}</span></div>
+                <div>BULTOS: ${g.cant_t || g.items.length} | ${g.condicion} | <span class="resaltado">${g.pago_en}</span></div>
+                <div style="text-align:right;">Flete: $${g.flete || 0} | Seg: $${g.seg || 0} | <span style="font-size:18px;">TOTAL: $${g.total}</span></div>
             </div>
         </div>`;
     });
 
-    html += `<div class="etiqueta">
-        <div style="width:33%;"><small>DESTINO:</small><br><b>${g.d_n}</b><br><span>${g.d_d}</span><br><b class="resaltado">${g.d_l}</b></div>
+    html += `
+    <div class="etiqueta">
+        <div style="width:33%;"><small>DESTINO:</small><br><b>${g.d_n}</b><br><span>${g.d_d || ''}</span><br><b class="resaltado">${g.d_l || ''}</b></div>
         <div style="width:33%; text-align:center;"><div id="qr_etiqueta" style="margin:auto; width:70px;"></div><b>${g.num}</b></div>
-        <div style="width:33%; text-align:right;"><small>ORIGEN:</small><br><b>${g.r_n}</b><br><b class="resaltado">${g.r_l}</b><br><div class="bultos-box">BULTOS: ${g.cant_t}</div></div>
+        <div style="width:33%; text-align:right;"><small>ORIGEN:</small><br><b>${g.r_n}</b><br><b class="resaltado">${g.r_l || ''}</b><br><div class="bultos-box">BULTOS: ${g.cant_t || g.items.length}</div></div>
     </div>`;
 
     const win = window.open('', '_blank');
     win.document.write(`<html><head><link rel="stylesheet" href="estilos-moulin.css"><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
     <div id="seccion-impresion">${html}</div>
-    <script>setTimeout(()=>{ new QRCode(document.getElementById("qr_etiqueta"),{text:"${g.num}",width:70,height:70}); window.print(); setTimeout(()=>window.close(),500); },600);</script>
+    <script>
+        setTimeout(()=>{ 
+            new QRCode(document.getElementById("qr_etiqueta"),{text:"${g.num}",width:70,height:70}); 
+            window.print(); 
+            setTimeout(()=>window.close(),500); 
+        },600);
+    </script>
     </body></html>`);
     win.document.close();
 }
-
 // 7. INTERFAZ Y TABS
 document.querySelectorAll('.nav-tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -210,3 +248,4 @@ function renderTablaClientes() {
     const tbody = document.getElementById('cuerpoTablaClientes');
     if(tbody) tbody.innerHTML = window.clientesGlobales.slice(0,20).map(c => `<tr><td><b>${c.nombre||c.n}</b></td><td>${c.direccion||c.d||'-'}</td><td>${c.localidad||c.l||'-'}</td><td>${c.telefono||c.t||'-'}</td><td><button onclick="eliminarCliente('${c.nombre||c.n}')">Borrar</button></td></tr>`).join('');
 }
+
