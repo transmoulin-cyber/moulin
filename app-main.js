@@ -38,7 +38,6 @@ onValue(ref(db, 'moulin/clientes'), (snapshot) => {
 onValue(ref(db, 'moulin/retiros'), (snapshot) => {
     const data = snapshot.val();
     retirosGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, id})) : [];
-    // renderRetiros(); // Si tienes esta función, actívala
 });
 
 onValue(ref(db, 'moulin/guias'), (snapshot) => {
@@ -134,7 +133,8 @@ if (btnEmitir) {
             flete: tot.flete.toFixed(2), seg: tot.seg.toFixed(2), total: tot.total.toFixed(2), v_decl: tot.v_decl.toFixed(2), cant_t: tot.cant_t,
             pago_en: document.getElementById('pago_en').value,
             condicion: document.getElementById('condicion').value,
-            estado: "Recibido", // ESTADO INICIAL
+            estado: "Recibido",
+            estado_facturacion: "pendiente",
             items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(tr => ({
                 c: tr.querySelector('.i-cant').value, t: tr.querySelector('.i-tipo').value, d: tr.querySelector('.i-det').value, u: tr.querySelector('.i-unit').value, vd: tr.querySelector('.i-decl').value
             }))
@@ -192,13 +192,11 @@ function imprimirTresHojas(g) {
     win.document.close();
 }
 
-// 7. FUNCIONES DE ESTADO (NUEVO)
+// 7. ESTADOS Y TABS
 window.cambiarEstado = (firebaseID, nuevoEstado) => {
     const updates = {};
     updates[`moulin/guias/${firebaseID}/estado`] = nuevoEstado;
-    update(ref(db), updates)
-        .then(() => console.log("Estado actualizado"))
-        .catch(e => alert("Error al actualizar estado"));
+    update(ref(db), updates).catch(e => alert("Error al actualizar"));
 };
 
 function renderHistorial() {
@@ -206,33 +204,27 @@ function renderHistorial() {
     if(!tbody) return;
     tbody.innerHTML = historialGlobal.slice(0,30).map(g => {
         const est = g.estado || "Recibido";
-        // Color según estado para el barro del depósito
         let fondo = "";
         if(est === "Error") fondo = "background-color: #ffe5e5;";
         if(est === "Entregado") fondo = "background-color: #e5ffe5;";
-
         return `
             <tr style="${fondo}">
                 <td><b>${g.num}</b></td>
                 <td>${g.fecha}</td>
                 <td>${g.d_l || '-'}</td>
                 <td>
-                    <select onchange="cambiarEstado('${g.firebaseID}', this.value)" style="padding:2px; border-radius:4px; border:1px solid #ccc; cursor:pointer;">
+                    <select onchange="cambiarEstado('${g.firebaseID}', this.value)">
                         <option value="Recibido" ${est==="Recibido"?"selected":""}>Recibido</option>
                         <option value="Deposito" ${est==="Deposito"?"selected":""}>Deposito</option>
                         <option value="Entregado" ${est==="Entregado"?"selected":""}>Entregado</option>
                         <option value="Error" ${est==="Error"?"selected":""}>Error</option>
                     </select>
                 </td>
-                <td style="text-align:center;">
-                    <button onclick="reimprimirGuia('${g.num}')" style="cursor:pointer; background:none; border:none; font-size:18px;">🖨️</button>
-                </td>
-            </tr>
-        `;
+                <td style="text-align:center;"><button onclick="reimprimirGuia('${g.num}')">🖨️</button></td>
+            </tr>`;
     }).join('');
 }
 
-// 8. TABS Y OTROS
 document.querySelectorAll('.nav-tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-content, .nav-tabs button').forEach(el => el.classList.remove('active'));
@@ -247,22 +239,58 @@ if (addItemBtn) addItemBtn.addEventListener('click', agregarFila);
 
 window.onload = () => { if(document.getElementById('cuerpoItems') && !document.getElementById('cuerpoItems').innerHTML.trim()) agregarFila(); };
 
+// 8. CUENTA CORRIENTE
 function renderTablaClientes() {
     const tbody = document.getElementById('cuerpoTablaClientes');
     if(!tbody) return;
-    tbody.innerHTML = window.clientesGlobales.slice(0,30).map(c => `
-        <tr>
-            <td><b>${c.nombre || c.n}</b></td>
-            <td>${c.direccion || c.d || '-'}</td>
-            <td>${c.localidad || c.l || '-'}</td>
-            <td>${c.telefono || c.t || '-'}</td>
-            <td><button onclick="eliminarCliente('${(c.nombre || c.n).replace(/'/g, "\\'")}')" style="background:#ff4444; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">Borrar</button></td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = window.clientesGlobales.slice(0,30).map(c => {
+        const nombreC = c.nombre || c.n;
+        const pendientes = historialGlobal.filter(g => 
+            (g.r_n === nombreC || g.d_n === nombreC) && 
+            (g.condicion === "CTA CTE") && 
+            (g.estado_facturacion !== "facturado")
+        );
+        const btnResumen = pendientes.length > 0 
+            ? `<button onclick="generarResumenCtaCte('${nombreC}')" style="background:#f6ad55; font-weight:bold;">${pendientes.length} Pend.</button>` 
+            : `<span style="color:#999;">Al día</span>`;
+
+        return `<tr><td><b>${nombreC}</b></td><td>${c.direccion || '-'}</td><td>${c.localidad || '-'}</td><td align="center">${btnResumen}</td>
+                <td><button onclick="eliminarCliente('${nombreC.replace(/'/g, "\\'")}')" style="background:#ff4444; color:white;">Borrar</button></td></tr>`;
+    }).join('');
 }
 
-window.eliminarCliente = (nombre) => {
-    if(confirm(`¿Eliminar a ${nombre}?`)) {
-        set(ref(db, `moulin/clientes/${nombre.replace(/[.#$/[\]]/g, "")}`), null);
-    }
+window.generarResumenCtaCte = async (cliente) => {
+    const aFacturar = historialGlobal.filter(g => 
+        (g.r_n === cliente || g.d_n === cliente) && 
+        (g.condicion === "CTA CTE") && 
+        (g.estado_facturacion !== "facturado")
+    );
+    if (aFacturar.length === 0) return alert("Nada pendiente.");
+    
+    const total = aFacturar.reduce((acc, g) => acc + parseFloat(g.total || 0), 0);
+    if(!confirm(`Resumen para: ${cliente}\nTotal: $${total.toFixed(2)}\n¿Descargar y cerrar?`)) return;
+
+    const datosExcel = aFacturar.map(g => ({
+        "Fecha": g.fecha, "Guía N°": g.num,
+        "Tipo": (g.r_n === cliente) ? "SALIDA" : "ENTRADA",
+        "Origen/Destino": (g.r_n === cliente) ? g.d_n : g.r_n,
+        "Importe": parseFloat(g.total)
+    }));
+
+    try {
+        const ws = XLSX.utils.json_to_sheet(datosExcel);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Resumen");
+        XLSX.writeFile(wb, `Resumen_${cliente}.xlsx`);
+
+        for (let guia of aFacturar) {
+            await update(ref(db), { [`moulin/guias/${guia.firebaseID}/estado_facturacion`]: "facturado" });
+        }
+        alert("Cuenta cerrada.");
+    } catch (e) { alert("Error al exportar."); }
 };
+
+window.eliminarCliente = (nombre) => {
+    if(confirm(`¿Eliminar a ${nombre}?`)) set(ref(db, `moulin/clientes/${nombre.replace(/[.#$/[\]]/g, "")}`), null);
+};
+
