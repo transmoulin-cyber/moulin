@@ -38,7 +38,7 @@
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
             const data = snapshot.val();
             window.historialGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
-            const misGuias = window.historialGlobal.filter(g => g.num.startsWith(PREFIJO));
+           const misGuias = window.historialGlobal.filter(g => g.num && g.num.startsWith(PREFIJO));
             if (misGuias.length > 0) {
                 const max = Math.max(...misGuias.map(g => parseInt(g.num.split('-')[1]) || 0));
                 proximoNumero = max + 1;
@@ -323,3 +323,4 @@
 </script>
 </body>
 </html>
+
