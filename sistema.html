@@ -35,16 +35,31 @@
         let proximoNumero = 1001;
         const PRECIOS_BASE = { "Bulto": 18000, "Pallet": 180000, "Sobre": 15000, "Caja": 18000 };
 
+        // --- Bloque Firebase Corregido ---
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
-            const data = snapshot.val();
-            window.historialGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
-           const misGuias = window.historialGlobal.filter(g => g.num && g.num.startsWith(PREFIJO));
-            if (misGuias.length > 0) {
-                const max = Math.max(...misGuias.map(g => parseInt(g.num.split('-')[1]) || 0));
-                proximoNumero = max + 1;
-            }
-            document.getElementById('display_guia').innerText = `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`;
-            renderHistorial();
+            try {
+                const data = snapshot.val();
+                window.historialGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})).reverse() : [];
+                
+                const misGuias = window.historialGlobal.filter(g => g && g.num && typeof g.num === 'string' && g.num.startsWith(PREFIJO));
+                
+                if (misGuias.length > 0) {
+                    const nros = misGuias.map(g => {
+                        const partes = g.num.split('-');
+                        return partes.length > 1 ? parseInt(partes[1]) : 0;
+                    }).filter(n => !isNaN(n));
+                    
+                    proximoNumero = nros.length > 0 ? Math.max(...nros) + 1 : 1001;
+                } else {
+                    proximoNumero = 1001;
+                }
+
+                const display = document.getElementById('display_guia');
+                if (display) {
+                    display.innerText = `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`;
+                }
+                renderHistorial();
+            } catch (e) { console.error("Error en onValue:", e); }
         });
 
         onValue(ref(db, 'moulin/clientes'), (snapshot) => {
@@ -314,7 +329,9 @@
 
         document.getElementById('seccion-impresion').innerHTML = html;
         setTimeout(() => {
-            new QRCode(document.getElementById("qr_etiqueta"), { text: g.num, width: 70, height: 70 });
+            if(document.getElementById("qr_etiqueta")) {
+                new QRCode(document.getElementById("qr_etiqueta"), { text: g.num, width: 70, height: 70 });
+            }
             window.print();
         }, 300);
     }
@@ -323,4 +340,3 @@
 </script>
 </body>
 </html>
-
