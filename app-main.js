@@ -38,6 +38,7 @@ onValue(ref(db, 'moulin/clientes'), (snapshot) => {
 onValue(ref(db, 'moulin/retiros'), (snapshot) => {
     const data = snapshot.val();
     retirosGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, id})) : [];
+    // renderRetiros(); // Si tenés esta función definida en otro lado, descomentala
 });
 
 onValue(ref(db, 'moulin/guias'), (snapshot) => {
@@ -142,15 +143,20 @@ if (btnEmitir) {
 
         try {
             await set(ref(db, `moulin/guias/${Date.now()}`), guia);
+            
+            // Función auxiliar interna para guardar cliente
             const guardarF = (n, d, l, t, c) => {
                 if(!n) return;
                 set(ref(db, `moulin/clientes/${n.replace(/[.#$/[\]]/g, "")}`), { nombre: n, direccion: d, localidad: l, telefono: t, cbu: c });
             };
+            
             guardarF(guia.r_n, guia.r_d, guia.r_l, guia.r_t, guia.r_cbu);
             guardarF(guia.d_n, guia.d_d, guia.d_l, guia.d_t, guia.d_cbu);
+            
             imprimirTresHojas(guia);
             setTimeout(() => location.reload(), 1000);
         } catch (error) {
+            console.error(error);
             alert("Error al guardar.");
         }
     };
@@ -182,14 +188,18 @@ function imprimirTresHojas(g) {
                 <tbody>${itemsH}</tbody>
             </table>
             <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold;">
-                <div>BULTOS: ${g.cant_t} | ${g.condicion}</div>
+                <div>BULTOS: ${g.cant_t || g.items.length} | ${g.condicion || ''}</div>
                 <div>TOTAL: $${g.total}</div>
             </div>
         </div>`;
     });
+    
+    // Agregamos script para QR si es necesario o impresión directa
     const win = window.open('', '_blank');
-    win.document.write(`<html><body>${html}</body></html>`);
-    win.document.close();
+    if (win) {
+        win.document.write(`<html><body>${html}<script>setTimeout(()=>{window.print(); window.close();}, 500);</script></body></html>`);
+        win.document.close();
+    }
 }
 
 // 7. ESTADOS Y TABS
@@ -207,13 +217,17 @@ function renderHistorial() {
         let fondo = "";
         if(est === "Error") fondo = "background-color: #ffe5e5;";
         if(est === "Entregado") fondo = "background-color: #e5ffe5;";
+        
+        // Manejo seguro del ID de firebase
+        const fid = g.firebaseID || '';
+
         return `
             <tr style="${fondo}">
                 <td><b>${g.num}</b></td>
                 <td>${g.fecha}</td>
                 <td>${g.d_l || '-'}</td>
                 <td>
-                    <select onchange="cambiarEstado('${g.firebaseID}', this.value)">
+                    <select onchange="cambiarEstado('${fid}', this.value)">
                         <option value="Recibido" ${est==="Recibido"?"selected":""}>Recibido</option>
                         <option value="Deposito" ${est==="Deposito"?"selected":""}>Deposito</option>
                         <option value="Entregado" ${est==="Entregado"?"selected":""}>Entregado</option>
@@ -225,6 +239,90 @@ function renderHistorial() {
     }).join('');
 }
 
+// 8. CUENTA CORRIENTE Y TABLA CLIENTES
+function renderTablaClientes() {
+    const tbody = document.getElementById('cuerpoTablaClientes');
+    if(!tbody) return;
+    
+    tbody.innerHTML = window.clientesGlobales
+        .filter(c => c.nombre || c.n) // Filtro de seguridad
+        .slice(0,30)
+        .map(c => {
+            const nombreC = c.nombre || c.n;
+            const pendientes = historialGlobal.filter(g => 
+                (g.r_n === nombreC || g.d_n === nombreC) && 
+                (g.condicion === "CTA CTE") && 
+                (g.estado_facturacion !== "facturado")
+            );
+            
+            // Escapamos comillas simples para evitar errores en el onclick
+            const nombreSafe = nombreC.replace(/'/g, "\\'");
+            
+            const btnResumen = pendientes.length > 0 
+                ? `<button onclick="generarResumenCtaCte('${nombreSafe}')" style="background:#f6ad55; font-weight:bold; border:none; padding:4px; cursor:pointer;">${pendientes.length} Pend.</button>` 
+                : `<span style="color:#999;">Al día</span>`;
+
+            return `<tr>
+                <td><b>${nombreC}</b></td>
+                <td>${c.direccion || '-'}</td>
+                <td>${c.localidad || '-'}</td>
+                <td align="center">${btnResumen}</td>
+                <td><button onclick="eliminarCliente('${nombreSafe}')" style="background:#ff4444; color:white; border:none; padding:4px; cursor:pointer;">Borrar</button></td>
+            </tr>`;
+        }).join('');
+}
+
+window.generarResumenCtaCte = async (cliente) => {
+    // Verificamos si XLSX está cargado
+    if (typeof XLSX === 'undefined') {
+        alert("La librería XLSX no está cargada. Por favor recarga la página o verifica tu conexión.");
+        return;
+    }
+
+    const aFacturar = historialGlobal.filter(g => 
+        (g.r_n === cliente || g.d_n === cliente) && 
+        (g.condicion === "CTA CTE") && 
+        (g.estado_facturacion !== "facturado")
+    );
+    if (aFacturar.length === 0) return alert("Nada pendiente.");
+    
+    const total = aFacturar.reduce((acc, g) => acc + parseFloat(g.total || 0), 0);
+    if(!confirm(`Resumen para: ${cliente}\nTotal: $${total.toFixed(2)}\n¿Descargar Excel y cerrar cuenta?`)) return;
+
+    const datosExcel = aFacturar.map(g => ({
+        "Fecha": g.fecha, 
+        "Guía N°": g.num,
+        "Tipo": (g.r_n === cliente) ? "SALIDA" : "ENTRADA",
+        "Origen/Destino": (g.r_n === cliente) ? g.d_n : g.r_n,
+        "Importe": parseFloat(g.total)
+    }));
+
+    try {
+        const ws = XLSX.utils.json_to_sheet(datosExcel);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Resumen");
+        XLSX.writeFile(wb, `Resumen_${cliente}.xlsx`);
+
+        // Actualizamos estado en Firebase
+        for (let guia of aFacturar) {
+            if(guia.firebaseID) {
+                await update(ref(db), { [`moulin/guias/${guia.firebaseID}/estado_facturacion`]: "facturado" });
+            }
+        }
+        alert("Cuenta cerrada y actualizada.");
+    } catch (e) { 
+        console.error(e);
+        alert("Error al exportar o actualizar."); 
+    }
+};
+
+window.eliminarCliente = (nombre) => {
+    if(confirm(`¿Eliminar a ${nombre}?`)) {
+        set(ref(db, `moulin/clientes/${nombre.replace(/[.#$/[\]]/g, "")}`), null);
+    }
+};
+
+// Listeners de Tabs
 document.querySelectorAll('.nav-tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-content, .nav-tabs button').forEach(el => el.classList.remove('active'));
@@ -238,59 +336,3 @@ const addItemBtn = document.getElementById('add-item');
 if (addItemBtn) addItemBtn.addEventListener('click', agregarFila);
 
 window.onload = () => { if(document.getElementById('cuerpoItems') && !document.getElementById('cuerpoItems').innerHTML.trim()) agregarFila(); };
-
-// 8. CUENTA CORRIENTE
-function renderTablaClientes() {
-    const tbody = document.getElementById('cuerpoTablaClientes');
-    if(!tbody) return;
-    tbody.innerHTML = window.clientesGlobales.slice(0,30).map(c => {
-        const nombreC = c.nombre || c.n;
-        const pendientes = historialGlobal.filter(g => 
-            (g.r_n === nombreC || g.d_n === nombreC) && 
-            (g.condicion === "CTA CTE") && 
-            (g.estado_facturacion !== "facturado")
-        );
-        const btnResumen = pendientes.length > 0 
-            ? `<button onclick="generarResumenCtaCte('${nombreC}')" style="background:#f6ad55; font-weight:bold;">${pendientes.length} Pend.</button>` 
-            : `<span style="color:#999;">Al día</span>`;
-
-        return `<tr><td><b>${nombreC}</b></td><td>${c.direccion || '-'}</td><td>${c.localidad || '-'}</td><td align="center">${btnResumen}</td>
-                <td><button onclick="eliminarCliente('${nombreC.replace(/'/g, "\\'")}')" style="background:#ff4444; color:white;">Borrar</button></td></tr>`;
-    }).join('');
-}
-
-window.generarResumenCtaCte = async (cliente) => {
-    const aFacturar = historialGlobal.filter(g => 
-        (g.r_n === cliente || g.d_n === cliente) && 
-        (g.condicion === "CTA CTE") && 
-        (g.estado_facturacion !== "facturado")
-    );
-    if (aFacturar.length === 0) return alert("Nada pendiente.");
-    
-    const total = aFacturar.reduce((acc, g) => acc + parseFloat(g.total || 0), 0);
-    if(!confirm(`Resumen para: ${cliente}\nTotal: $${total.toFixed(2)}\n¿Descargar y cerrar?`)) return;
-
-    const datosExcel = aFacturar.map(g => ({
-        "Fecha": g.fecha, "Guía N°": g.num,
-        "Tipo": (g.r_n === cliente) ? "SALIDA" : "ENTRADA",
-        "Origen/Destino": (g.r_n === cliente) ? g.d_n : g.r_n,
-        "Importe": parseFloat(g.total)
-    }));
-
-    try {
-        const ws = XLSX.utils.json_to_sheet(datosExcel);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Resumen");
-        XLSX.writeFile(wb, `Resumen_${cliente}.xlsx`);
-
-        for (let guia of aFacturar) {
-            await update(ref(db), { [`moulin/guias/${guia.firebaseID}/estado_facturacion`]: "facturado" });
-        }
-        alert("Cuenta cerrada.");
-    } catch (e) { alert("Error al exportar."); }
-};
-
-window.eliminarCliente = (nombre) => {
-    if(confirm(`¿Eliminar a ${nombre}?`)) set(ref(db, `moulin/clientes/${nombre.replace(/[.#$/[\]]/g, "")}`), null);
-};
-
