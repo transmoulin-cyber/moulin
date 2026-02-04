@@ -6,7 +6,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
-    <script type="module">
+   <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getDatabase, ref, set, push, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
@@ -22,12 +22,17 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
+        
+        // Recuperar sesión
         const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
-        if (!sesion) { window.location.href = "index.html"; }
+        if (!sesion) { 
+            console.error("No hay sesión activa");
+            window.location.href = "index.html"; 
+        }
 
-        const PREFIJO_BASE = sesion.prefijo;
-        const PREFIJO = (["TODO","ADM","REC"].includes(PREFIJO_BASE)) ? "RECON" : PREFIJO_BASE;
-        const NOMBRE_OP = sesion.nombre;
+        const PREFIJO_BASE = sesion.prefijo || "RECON";
+        const PREFIJO = (["TODO","ADM","REC"].includes(PREFIJO_BASE.toUpperCase())) ? "RECON" : PREFIJO_BASE.toUpperCase();
+        const NOMBRE_OP = sesion.nombre || "Operador";
 
         window.historialGlobal = [];
         window.clientesGlobal = {}; 
@@ -35,6 +40,88 @@
         let proximoNumero = 1001;
         const PRECIOS_BASE = { "Bulto": 18000, "Pallet": 180000, "Sobre": 15000, "Caja": 18000 };
 
+        // --- Carga de Guías ---
+        const guiasRef = ref(db, 'moulin/guias');
+        onValue(guiasRef, (snapshot) => {
+            console.log("Datos recibidos de Firebase..."); // Para debug
+            const data = snapshot.val();
+            if (data) {
+                window.historialGlobal = Object.entries(data).map(([id, val]) => ({
+                    ...val, 
+                    firebaseID: id
+                })).reverse();
+            } else {
+                window.historialGlobal = [];
+            }
+
+            // Filtrar para el número correlativo
+            const misGuias = window.historialGlobal.filter(g => 
+                g && g.num && typeof g.num === 'string' && g.num.startsWith(PREFIJO)
+            );
+
+            if (misGuias.length > 0) {
+                const nros = misGuias.map(g => {
+                    const partes = g.num.split('-');
+                    return partes.length > 1 ? parseInt(partes[1]) : 0;
+                }).filter(n => !isNaN(n));
+                proximoNumero = nros.length > 0 ? Math.max(...nros) + 1 : 1001;
+            } else {
+                proximoNumero = 1001;
+            }
+
+            const display = document.getElementById('display_guia');
+            if (display) {
+                display.innerText = `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`;
+            }
+            window.renderHistorial();
+        }, (error) => {
+            console.error("Error de Firebase:", error);
+            alert("Error de conexión: " + error.message);
+        });
+
+        // --- Carga de Clientes ---
+        onValue(ref(db, 'moulin/clientes'), (snapshot) => {
+            window.clientesGlobal = snapshot.val() || {};
+            const lista = document.getElementById('lista_clientes');
+            if (lista) {
+                lista.innerHTML = Object.keys(window.clientesGlobal).map(c => `<option value="${c}">`).join('');
+            }
+        });
+
+        // Exportar funciones necesarias al objeto window
+        window.actualizarEstadoNube = (id, est) => update(ref(db, `moulin/guias/${id}`), { estado: est });
+        
+        window.confirmarYEmitir = function() {
+            const r_n = document.getElementById('r_n').value;
+            const d_n = document.getElementById('d_n').value;
+            if(!r_n || !d_n) return alert("Faltan datos de clientes.");
+            
+            const tot = window.calcularTotales();
+            const idU = Date.now();
+            const nroGuia = `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`;
+            
+            const g = {
+                num: nroGuia,
+                fecha: new Date().toLocaleDateString(),
+                r_n: r_n, r_t: document.getElementById('r_t').value, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value, r_cbu: document.getElementById('r_cbu').value,
+                d_n: d_n, d_t: document.getElementById('d_t').value, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value, d_cbu: document.getElementById('d_cbu').value,
+                flete: tot.flete.toFixed(2), seg: tot.seg.toFixed(2), total: tot.total.toFixed(2), v_decl: tot.v_decl.toFixed(2), cant_t: tot.cant_t,
+                pago_en: document.getElementById('pago_en').value, condicion: document.getElementById('condicion').value,
+                cr_activo: document.getElementById('cr_act').value, cr_monto: document.getElementById('cr_monto').value,
+                p_seg_aplicado: document.getElementById('p_seg').value, estado: 'recibido', emisor: NOMBRE_OP,
+                items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(r => ({
+                    c: r.querySelector('.i-cant').value, t: r.querySelector('.i-tipo').value, d: r.querySelector('.i-det').value, u: r.querySelector('.i-unit').value, vd: r.querySelector('.i-decl').value
+                }))
+            };
+
+            update(ref(db, `moulin/guias/${idU}`), g)
+                .then(() => { 
+                    window.imprimir(g); 
+                    setTimeout(() => location.reload(), 1000); 
+                })
+                .catch(err => alert("Error al guardar: " + err.message));
+        };
+    </script>
         // --- Bloque Firebase Corregido ---
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
             try {
@@ -340,3 +427,4 @@
 </script>
 </body>
 </html>
+
