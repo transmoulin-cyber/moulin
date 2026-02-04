@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+iimport { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, set, push, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
 // 1. CONFIGURACIÓN Y SESIÓN
@@ -51,7 +51,10 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
         const nros = misGuias.map(g => parseInt(g.num.split('-')[1]) || 0);
         proximoNumero = Math.max(...nros) + 1;
     }
-    document.getElementById('display_guia').innerText = `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`;
+    const displayGuia = document.getElementById('display_guia');
+    if (displayGuia) {
+        displayGuia.innerText = `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`;
+    }
     renderHistorial();
 });
 
@@ -80,6 +83,9 @@ ejecutarAutocompletado('d_n', 'd');
 
 // 4. CÁLCULOS Y FILAS
 function agregarFila() {
+    const cuerpoItems = document.getElementById('cuerpoItems');
+    if (!cuerpoItems) return; // Validación extra por si no existe el DOM aún
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
         <td><input type="number" class="i-cant" value="1"></td>
@@ -91,7 +97,7 @@ function agregarFila() {
     `;
     tr.querySelector('.btn-del').onclick = () => { tr.remove(); calcularTotales(); };
     tr.querySelectorAll('input, select').forEach(i => i.oninput = calcularTotales);
-    document.getElementById('cuerpoItems').appendChild(tr);
+    cuerpoItems.appendChild(tr);
     calcularTotales();
 }
 
@@ -112,40 +118,50 @@ function calcularTotales() {
 }
 
 // 5. EMISIÓN Y GRABADO
-document.getElementById('btn-emitir').onclick = async () => {
-    const tot = calcularTotales();
-    const r_n = document.getElementById('r_n').value.trim();
-    const d_n = document.getElementById('d_n').value.trim();
+const btnEmitir = document.getElementById('btn-emitir');
+if (btnEmitir) {
+    btnEmitir.onclick = async () => {
+        const tot = calcularTotales();
+        const r_n = document.getElementById('r_n').value.trim();
+        const d_n = document.getElementById('d_n').value.trim();
 
-    if(!r_n || !d_n) return alert("Faltan datos de clientes.");
+        if(!r_n || !d_n) return alert("Faltan datos de clientes.");
 
-    const guia = {
-        num: document.getElementById('display_guia').innerText,
-        fecha: new Date().toLocaleDateString(),
-        operador: NOMBRE_OP,
-        r_n, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value, r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value,
-        d_n, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value, d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value,
-        flete: tot.flete.toFixed(2), seg: tot.seg.toFixed(2), total: tot.total.toFixed(2), v_decl: tot.v_decl.toFixed(2), cant_t: tot.cant_t,
-        pago_en: document.getElementById('pago_en').value,
-        condicion: document.getElementById('condicion').value,
-        items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(tr => ({
-            c: tr.querySelector('.i-cant').value, t: tr.querySelector('.i-tipo').value, d: tr.querySelector('.i-det').value, u: tr.querySelector('.i-unit').value, vd: tr.querySelector('.i-decl').value
-        }))
+        const guia = {
+            num: document.getElementById('display_guia').innerText,
+            fecha: new Date().toLocaleDateString(),
+            operador: NOMBRE_OP,
+            r_n, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value, r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value,
+            d_n, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value, d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value,
+            flete: tot.flete.toFixed(2), seg: tot.seg.toFixed(2), total: tot.total.toFixed(2), v_decl: tot.v_decl.toFixed(2), cant_t: tot.cant_t,
+            pago_en: document.getElementById('pago_en').value,
+            condicion: document.getElementById('condicion').value,
+            items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(tr => ({
+                c: tr.querySelector('.i-cant').value, t: tr.querySelector('.i-tipo').value, d: tr.querySelector('.i-det').value, u: tr.querySelector('.i-unit').value, vd: tr.querySelector('.i-decl').value
+            }))
+        };
+
+        // Guardado asíncrono
+        try {
+            await set(ref(db, `moulin/guias/${Date.now()}`), guia);
+
+            // Guardar/Actualizar Ficha de Cliente
+            const guardarF = (n, d, l, t, c) => {
+                if(!n) return;
+                // Usamos replace para limpiar caracteres prohibidos en claves de Firebase
+                set(ref(db, `moulin/clientes/${n.replace(/[.#$/[\]]/g, "")}`), { nombre: n, direccion: d, localidad: l, telefono: t, cbu: c });
+            };
+            guardarF(guia.r_n, guia.r_d, guia.r_l, guia.r_t, guia.r_cbu);
+            guardarF(guia.d_n, guia.d_d, guia.d_l, guia.d_t, guia.d_cbu);
+
+            imprimirTresHojas(guia);
+            setTimeout(() => location.reload(), 1000);
+        } catch (error) {
+            console.error("Error al guardar:", error);
+            alert("Hubo un error al guardar la guía. Verifique su conexión.");
+        }
     };
-
-    await set(ref(db, `moulin/guias/${Date.now()}`), guia);
-
-    // Guardar/Actualizar Ficha de Cliente
-    const guardarF = (n, d, l, t, c) => {
-        if(!n) return;
-        set(ref(db, `moulin/clientes/${n.replace(/[.#$/[\]]/g, "")}`), { nombre: n, direccion: d, localidad: l, telefono: t, cbu: c });
-    };
-    guardarF(guia.r_n, guia.r_d, guia.r_l, guia.r_t, guia.r_cbu);
-    guardarF(guia.d_n, guia.d_d, guia.d_l, guia.d_t, guia.d_cbu);
-
-    imprimirTresHojas(guia);
-    setTimeout(() => location.reload(), 1000);
-};
+}
 
 // 6. MOTOR DE IMPRESIÓN Y REIMPRESIÓN (Versión con tamaños fijos)
 window.reimprimirGuia = (num) => {
@@ -168,6 +184,7 @@ function imprimirTresHojas(g) {
         </tr>`).join('');
 
     let html = "";
+    // Generamos las dos copias (Original y Duplicado)
     ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit) => {
         html += `
         <div style="height: 11cm; border: 1px solid #000; padding: 12px; display: flex; flex-direction: column; overflow: hidden; font-size: 13px; margin-bottom: 0.3cm; line-height: 1.3; font-family: sans-serif;">
@@ -205,6 +222,7 @@ function imprimirTresHojas(g) {
         </div>`;
     });
 
+    // Generamos la etiqueta
     html += `
     <div style="height: 4cm; border: 2px dashed #000; padding: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-family: sans-serif;">
         <div style="width:33%;"><small>DESTINO:</small><br><b>${g.d_n}</b><br><span>${g.d_d || ''}</span><br><b style="background: #eee !important; font-weight: bold; padding: 0 4px; border: 1px solid #ccc;">${g.d_l || ''}</b></div>
@@ -213,31 +231,45 @@ function imprimirTresHojas(g) {
     </div>`;
 
     const win = window.open('', '_blank');
-    win.document.write(`<html><head><title>Imprimir ${g.num}</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    </head><body style="margin:0; padding:0;">
-    <div id="seccion-impresion">${html}</div>
-    <script>
-        setTimeout(()=>{ 
-            new QRCode(document.getElementById("qr_etiqueta"),{text:"${g.num}",width:70,height:70}); 
-            window.print(); 
-            setTimeout(()=>window.close(), 500); 
-        }, 600);
-    </script>
-    </body></html>`);
-    win.document.close();
+    if (win) {
+        win.document.write(`<html><head><title>Imprimir ${g.num}</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        </head><body style="margin:0; padding:0;">
+        <div id="seccion-impresion">${html}</div>
+        <script>
+            setTimeout(()=>{ 
+                new QRCode(document.getElementById("qr_etiqueta"),{text:"${g.num}",width:70,height:70}); 
+                window.print(); 
+                setTimeout(()=>window.close(), 500); 
+            }, 600);
+        </script>
+        </body></html>`);
+        win.document.close();
+    } else {
+        alert("Por favor habilita las ventanas emergentes para imprimir.");
+    }
 }
+
 // 7. INTERFAZ Y TABS
 document.querySelectorAll('.nav-tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-content, .nav-tabs button').forEach(el => el.classList.remove('active'));
-        document.getElementById(btn.dataset.tab).classList.add('active');
+        const tabContent = document.getElementById(btn.dataset.tab);
+        if(tabContent) tabContent.classList.add('active');
         btn.classList.add('active');
     });
 });
 
-document.getElementById('add-item').addEventListener('click', agregarFila);
-window.onload = () => { if(!document.getElementById('cuerpoItems').innerHTML) agregarFila(); };
+const addItemBtn = document.getElementById('add-item');
+if (addItemBtn) {
+    addItemBtn.addEventListener('click', agregarFila);
+}
+
+window.onload = () => { 
+    if(document.getElementById('cuerpoItems') && !document.getElementById('cuerpoItems').innerHTML.trim()) {
+        agregarFila(); 
+    }
+};
 
 // Render Historial y Clientes (Versión Funcional)
 function renderHistorial() {
@@ -279,3 +311,11 @@ function renderTablaClientes() {
     `).join('');
 }
 
+// Función auxiliar para eliminar cliente (Faltaba en el código original)
+window.eliminarCliente = (nombre) => {
+    if(confirm(`¿Seguro que deseas eliminar a ${nombre}?`)) {
+        set(ref(db, `moulin/clientes/${nombre.replace(/[.#$/[\]]/g, "")}`), null)
+        .then(() => alert("Cliente eliminado"))
+        .catch(e => console.error(e));
+    }
+};
