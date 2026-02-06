@@ -153,7 +153,7 @@ if (btnEmitir) {
             guardarF(guia.r_n, guia.r_d, guia.r_l, guia.r_t, guia.r_cbu);
             guardarF(guia.d_n, guia.d_d, guia.d_l, guia.d_t, guia.d_cbu);
             
-            imprimirTresHojas(guia);
+          imprimir(guia); // Quitamos el "TresHojas" porque la función se llama imprimir
             setTimeout(() => location.reload(), 1000);
         } catch (error) {
             console.error(error);
@@ -376,5 +376,6 @@ const addItemBtn = document.getElementById('add-item');
 if (addItemBtn) addItemBtn.addEventListener('click', agregarFila);
 
 window.onload = () => { if(document.getElementById('cuerpoItems') && !document.getElementById('cuerpoItems').innerHTML.trim()) agregarFila(); };
+
 
 
