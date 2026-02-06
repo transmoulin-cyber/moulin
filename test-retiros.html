@@ -1,26 +1,12 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MOULIN V8.7 - SISTEMA MODULAR</title>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    
-    <link rel="stylesheet" href="estilos-moulin.css">
-
-    <script type="module" src="app-main.js"></script>
-</head>
 <body>
     <datalist id="lista_clientes"></datalist>
 
-<nav class="nav-tabs no-print">
+    <nav class="nav-tabs no-print">
         <button id="btn-guia" class="active" data-tab="tab-guia">📦 EMITIR GUÍA</button>
         <button id="btn-retiros" data-tab="tab-retiros">📝 RETIROS <span id="badge-retiros" class="badge" style="display:none">0</span></button>
-        <button id="btn-clientes" data-tab="tab-clientes">👥 CLIENTES <span id="badge-clientes" class="badge">0</span></button>
+        <button id="btn-clientes-tab" data-tab="tab-clientes">👥 CLIENTES <span id="badge-clientes" class="badge">0</span></button>
     </nav>
-    
+
     <main id="tab-guia" class="tab-content active no-print">
         <div class="hoja">
             <header class="header-guia">
@@ -55,49 +41,41 @@
                 <button id="add-item" class="btn-secundario">+ Agregar Bulto</button>
             </section>
 
-           <section class="caja grid-pago">
-    <div>
-        <label style="font-size: 12px; color: var(--azul); font-weight: bold;">Lugar de Pago</label>
-        <select id="pago_en">
-            <option>PAGO EN ORIGEN</option>
-            <option>PAGO EN DESTINO</option>
-        </select>
-    </div>
-    <div>
-        <label style="font-size: 12px; color: var(--azul); font-weight: bold;">Condición</label>
-        <select id="condicion">
-            <option>CONTADO</option>
-            <option>CTA CTE</option>
-        </select>
-    </div>
-
-    <div style="margin-top: 10px;">
-        <label style="font-size: 12px; color: var(--azul); font-weight: bold;">Contra Reembolso?</label>
-        <select id="cr_activo" onchange="document.getElementById('cr_monto').style.display = (this.value=='SI'?'block':'none')">
-            <option value="NO">NO</option>
-            <option value="SI">SI</option>
-        </select>
-    </div>
-    <div style="margin-top: 10px;">
-        <label style="font-size: 12px; color: var(--azul); font-weight: bold;">Seguro %</label>
-        <input type="number" id="p_seg" value="0.8" step="0.1">
-    </div>
-
-    <div id="monto_container" style="grid-column: span 2; margin-top: 10px;">
-        <input type="number" id="cr_monto" placeholder="Monto Contra Reembolso $" style="display:none; border: 2px solid var(--naranja); background: #fffaf0;">
-    </div>
-</section>
+            <section class="caja grid-pago">
+                <div>
+                    <label style="font-size: 11px; color: var(--azul); font-weight: bold;">Lugar de Pago</label>
+                    <select id="pago_en">
+                        <option>PAGO EN ORIGEN</option>
+                        <option>PAGO EN DESTINO</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 11px; color: var(--azul); font-weight: bold;">Condición</label>
+                    <select id="condicion">
+                        <option>CONTADO</option>
+                        <option>CTA CTE</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 11px; color: var(--azul); font-weight: bold;">Contra Reembolso?</label>
+                    <select id="cr_activo" onchange="document.getElementById('cr_monto').style.display = (this.value=='SI'?'block':'none')">
+                        <option value="NO">NO</option>
+                        <option value="SI">SI</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 11px; color: var(--azul); font-weight: bold;">Seguro %</label>
+                    <input type="number" id="p_seg" value="0.8" step="0.1">
+                </div>
+                <div id="monto_container" style="grid-column: span 2; margin-top: 5px;">
+                    <input type="number" id="cr_monto" placeholder="Monto Contra Reembolso $" style="display:none; border: 2px solid orange;">
+                </div>
+            </section>
 
             <section class="historial-container">
-                <h4>HISTORIAL Y FILTROS</h4>
-                <div class="grid-filtros">
-                    <input type="date" id="f_desde">
-                    <input type="date" id="f_hasta">
-                    <input type="text" id="f_loc" placeholder="Localidad...">
-                    <button id="btn-excel" class="btn-dark">📊 Excel</button>
-                </div>
+                <h4>HISTORIAL RECIENTE</h4>
                 <table class="tabla-items">
-                    <thead><tr><th>Guía</th><th>Fecha</th><th>Ruta</th><th>Total</th><th></th></tr></thead>
+                    <thead><tr><th>Guía</th><th>Fecha</th><th>Destino</th><th>Estado</th><th></th></tr></thead>
                     <tbody id="listaHistorial"></tbody>
                 </table>
             </section>
@@ -107,14 +85,21 @@
     <main id="tab-retiros" class="tab-content no-print">
         <div class="hoja">
             <h3>SOLICITUD DE RETIRO</h3>
-            <div class="grid-2">
-                <div class="caja"><b>PUNTO RETIRO</b><input type="text" id="ret_lug"><input type="text" id="ret_dir"><input type="text" id="ret_loc"></div>
-                <div class="caja"><b>SOLICITANTE</b><input type="text" id="sol_nom"><input type="text" id="sol_dir"><input type="text" id="sol_loc"></div>
-            </div>
-            <textarea id="ret_obs" placeholder="Observaciones..."></textarea>
-            <button id="btn-guardar-retiro" class="btn-grande">AGENDAR RETIRO</button>
-            <h4>PENDIENTES</h4>
             <div id="listaRetiros"></div>
+        </div>
+    </main>
+
+    <main id="tab-clientes" class="tab-content no-print">
+        <div class="hoja">
+            <h3>BASE DE CLIENTES</h3>
+            <div style="overflow-x: auto;">
+                <table class="tabla-items">
+                    <thead>
+                        <tr><th>Nombre</th><th>Dirección</th><th>Localidad</th><th>Estado Cta</th><th>Acción</th></tr>
+                    </thead>
+                    <tbody id="cuerpoTablaClientes"></tbody>
+                </table>
+            </div>
         </div>
     </main>
 
@@ -124,30 +109,8 @@
     </footer>
 
     <div id="seccion-impresion"></div>
-    <button data-tab="tab-clientes">BASE CLIENTES <span id="badge-clientes" class="badge">0</span></button>
 
-<div id="tab-clientes" class="tab-content">
-    <div class="hoja">
-        <h3>Gestión de Base de Datos de Clientes</h3>
-        <p>Aquí podés ver cómo están guardados los datos en Firebase y detectar errores.</p>
-        <div style="overflow-x: auto;">
-            <table class="tabla-items">
-                <thead>
-                    <tr>
-                        <th>Nombre (ID)</th>
-                        <th>Dirección</th>
-                        <th>Localidad</th>
-                        <th>Deuda (Cta Cte)</th> <th>Acción</th>
-                    </tr>
-                </thead>
-                <tbody id="cuerpoTablaClientes">
-                    </tbody>
-            </table>
-        </div>
-    </div>
-</div>
 </body>
-</html>
 
 
 
