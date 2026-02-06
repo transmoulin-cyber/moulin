@@ -153,48 +153,76 @@ if (btnEmitir) {
 
 // 6. IMPRESIÓN (CORREGIDA)
 function imprimir(g) {
-    let itemsH = g.items.map(i => `<tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d}</td><td align="right">$${i.u}</td><td align="right">$${i.vd}</td></tr>`).join('');
+    let itemsH = g.items.map(i => `<tr><td align="center">${i.c || i.cant}</td><td>${i.t || i.tipo}</td><td>${i.d || i.det}</td><td align="right">$${i.u || i.unit}</td><td align="right">$${i.vd || i.v_decl || 0}</td></tr>`).join('');
     let html = "";
     const logoPath = "logo.png";
     
-    // Generamos la URL del QR directamente para que aparezca siempre
+    // Generador de QR directo (API de Google) - No falla nunca
     const urlQR = `https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=${encodeURIComponent(g.num)}&choe=UTF-8`;
 
     ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit, idx) => {
-        html += `
-        <div class="cupon" style="height: 10.5cm; border: 1px solid #000; padding: 10px; margin-bottom: 10px; box-sizing: border-box; display: flex; flex-direction: column;">
+        html += `<div class="cupon" style="height: 10.5cm; border: 1px solid #000; padding: 10px; margin-bottom: 10px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;">
             <div class="header-print" style="display:flex; align-items:center;">
                 <img src="${logoPath}" style="height:45px;" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
                 <b style="font-size:18px; margin-left:10px;">TRANSPORTE MOULIN</b>
                 <div style="margin-left:auto; text-align:right;"><small>${tit}</small><br><b style="font-size:22px; color:red;">${g.num}</b><br><b>${g.fecha}</b></div>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:8px 0; padding:8px; line-height:1.4; font-size:12px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:8px 0; padding:8px; line-height:1.4;">
                 <div style="border-right:1px solid #000; padding-right:8px;">
-                    <b style="font-size:13px;">REMITENTE:</b> ${g.r_n}<br>
-                    Dir: ${g.r_d}<br>
-                    Tel: ${g.r_t} | CBU: ${g.r_cbu}<br>
-                    Loc: <b>${g.r_l}</b>
+                    <b style="font-size:14px;">REMITENTE:</b> ${g.r_n}<br>
+                    Dir: ${g.r_d || '-'}<br>
+                    Loc: <span style="background:#eee; font-weight:bold;">${g.r_l}</span>
                 </div>
                 <div style="padding-left:8px;">
-                    <b style="font-size:13px;">DESTINATARIO:</b> ${g.d_n}<br>
-                    Dir: ${g.d_d}<br>
-                    Tel: ${g.d_t} | CBU: ${g.d_cbu}<br>
-                    Loc: <b>${g.d_l}</b>
+                    <b style="font-size:14px;">DESTINATARIO:</b> ${g.d_n}<br>
+                    Dir: ${g.d_d || '-'}<br>
+                    Loc: <span style="background:#eee; font-weight:bold;">${g.d_l}</span>
                 </div>
             </div>
             <table style="width:100%; border-collapse:collapse; font-size:11px; border:1px solid #000;">
                 <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th><th>V.Decl</th></tr></thead>
                 <tbody>${itemsH}</tbody>
             </table>
-            <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold; font-size:13px;">
-                <div>BULTOS: ${g.cant_t} | ${g.condicion} | ${g.pago_en}</div>
-                <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | <span style="font-size:16px;">TOTAL: $${g.total}</span></div>
+            <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold; font-size:14px;">
+                <div>BULTOS: ${g.cant_t} | ${g.condicion}</div>
+                <div style="text-align:right;">TOTAL: $${g.total}</div>
             </div>
-            <div style="margin-top:auto; text-align:right;">
-                <div style="border-top:1px solid #000; width:200px; text-align:center; margin-left:auto; font-size:10px;">Firma y Aclaración Receptor</div>
-            </div>
+            <div style="margin-top:auto; text-align:right;"><div style="border-top:1px solid #000; width:200px; text-align:center; margin-left:auto; font-size:11px;">Firma y Aclaración Receptor</div></div>
         </div>`;
     });
+
+    // ETIQUETA AJUSTADA A 3.5CM
+    html += `<div class="etiqueta" style="height: 3.5cm; border: 2px dashed #000; padding: 5px; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; overflow: hidden; page-break-inside: avoid;">
+        <div style="width:33%; line-height:1.1;">
+            <small>DESTINO:</small><br>
+            <b style="font-size:14px;">${g.d_n}</b><br>
+            <b style="font-size:16px; background:#eee;">${g.d_l}</b>
+        </div>
+        <div style="width:33%; text-align:center;">
+            <img src="${urlQR}" style="width:85px; height:85px;">
+            <br><b style="font-size:13px;">${g.num}</b>
+        </div>
+        <div style="width:33%; text-align:right; line-height:1.1;">
+            <small>ORIGEN:</small> <b style="background:#eee;">${g.r_l}</b><br>
+            <div style="border: 2px solid #000; display: inline-block; padding: 5px; margin-top:10px;">
+                BULTOS: <b style="font-size:22px;">${g.cant_t}</b>
+            </div>
+        </div>
+    </div>`;
+
+    const win = window.open('', '_blank');
+    win.document.write(`<html><head><title>Imprimir ${g.num}</title><style>
+        @page { size: auto; margin: 0.5cm; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    </style></head><body>${html}</body></html>`);
+    win.document.close();
+    
+    // Esperamos a que cargue el QR antes de imprimir
+    win.onload = function() {
+        win.print();
+        setTimeout(() => win.close(), 500);
+    };
+}
 
     // LA ETIQUETA - AJUSTADA A 3.5CM
     html += `
@@ -268,4 +296,5 @@ document.querySelectorAll('.nav-tabs button').forEach(btn => {
 
 window.onload = () => { if(document.getElementById('cuerpoItems')) window.agregarFila(); };
 if(document.getElementById('add-item')) document.getElementById('add-item').onclick = window.agregarFila;
+
 
