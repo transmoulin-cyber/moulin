@@ -172,32 +172,41 @@ window.reimprimirGuia = (num) => {
 function imprimirTresHojas(g) {
     let itemsH = g.items.map(i => `<tr><td align="center" style="border: 1px solid #000;">${i.c || i.cant}</td><td style="border: 1px solid #000;">${i.t || i.tipo}</td><td style="border: 1px solid #000;">${i.d || i.det}</td><td align="right" style="border: 1px solid #000;">$${i.u || i.unit || 0}</td><td align="right" style="border: 1px solid #000;">$${i.vd || i.v_decl || 0}</td></tr>`).join('');
     let html = "";
-    ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit) => {
-        html += `<div style="height: 11cm; border: 1px solid #000; padding: 12px; font-family: sans-serif; margin-bottom: 0.3cm;">
-            <div style="display: flex; align-items: center; border-bottom: 2px solid #000;">
-                <img src="logo.png" style="height: 45px;" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
-                <b style="font-size:18px; margin-left:10px;">TRANSPORTE MOULIN</b>
-                <div style="margin-left:auto; text-align:right;"><small>${tit}</small><br><b style="font-size:22px; color:red;">${g.num}</b><br><b>${g.fecha}</b></div>
+    
+    // Agregamos 'ETIQUETA' a la lista
+    ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE', 'ETIQUETA CAJA'].forEach((tit, index) => {
+        // Si es el tercer elemento (index 2), le damos 4cm, si no 11cm
+        let alto = (index === 2) ? "4cm" : "11cm";
+        let esChico = (index === 2);
+
+        html += `<div style="height: ${alto}; border: 1px solid #000; padding: 8px; font-family: sans-serif; margin-bottom: 0.3cm; overflow: hidden; page-break-inside: avoid;">
+            <div style="display: flex; align-items: center; border-bottom: ${esChico ? '1px' : '2px'} solid #000;">
+                <img src="logo.png" style="height: ${esChico ? '25px' : '45px'};" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
+                <b style="font-size: ${esChico ? '14px' : '18px'}; margin-left:10px;">MOULIN</b>
+                <div style="margin-left:auto; text-align:right;">
+                    <small style="font-size:10px;">${tit}</small><br>
+                    <b style="font-size: ${esChico ? '16px' : '22px'}; color:red;">${g.num}</b>
+                </div>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:8px 0; padding:8px;">
-                <div style="border-right:1px solid #000;"><b>REMITENTE:</b> ${g.r_n}<br>Loc: ${g.r_l || ''}</div>
-                <div style="padding-left:8px;"><b>DESTINATARIO:</b> ${g.d_n}<br>Loc: ${g.d_l || ''}</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:4px 0; padding:4px; font-size: ${esChico ? '10px' : '12px'};">
+                <div style="border-right:1px solid #000;"><b>R:</b> ${g.r_n}</div>
+                <div style="padding-left:8px;"><b>D:</b> ${g.d_n} (${g.d_l || ''})</div>
             </div>
-            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
-                <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th><th>V.Decl</th></tr></thead>
+            ${!esChico ? `
+            <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th></tr></thead>
                 <tbody>${itemsH}</tbody>
-            </table>
-            <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold;">
-                <div>BULTOS: ${g.cant_t || g.items.length} | ${g.condicion || ''}</div>
+            </table>` : `<div style="font-size:11px;"><b>DETALLE:</b> ${g.items[0]?.d || 'Varios'}</div>`}
+            <div style="display:flex; justify-content:space-between; margin-top:4px; font-weight:bold; font-size: ${esChico ? '11px' : '13px'};">
+                <div>BULTOS: ${g.cant_t || g.items.length}</div>
                 <div>TOTAL: $${g.total}</div>
             </div>
         </div>`;
     });
     
-    // Agregamos script para QR si es necesario o impresión directa
     const win = window.open('', '_blank');
     if (win) {
-        win.document.write(`<html><body>${html}<script>setTimeout(()=>{window.print(); window.close();}, 500);</script></body></html>`);
+        win.document.write(`<html><head><title>Impresión</title></head><body style="margin:0;">${html}<script>setTimeout(()=>{window.print(); window.close();}, 500);</script></body></html>`);
         win.document.close();
     }
 }
@@ -250,11 +259,11 @@ function renderTablaClientes() {
         .map(c => {
             const nombreC = c.nombre || c.n;
             const pendientes = historialGlobal.filter(g => 
-                (g.r_n === nombreC || g.d_n === nombreC) && 
-                (g.condicion === "CTA CTE") && 
+               // Usamos toUpperCase() para que no importen las mayúsculas/minúsculas
+                (g.r_n?.toUpperCase() === nombreC.toUpperCase() || g.d_n?.toUpperCase() === nombreC.toUpperCase()) && 
+                (g.condicion === "CTA CTE") &&
                 (g.estado_facturacion !== "facturado")
-            );
-            
+);
             // Escapamos comillas simples para evitar errores en el onclick
             const nombreSafe = nombreC.replace(/'/g, "\\'");
             
@@ -336,3 +345,4 @@ const addItemBtn = document.getElementById('add-item');
 if (addItemBtn) addItemBtn.addEventListener('click', agregarFila);
 
 window.onload = () => { if(document.getElementById('cuerpoItems') && !document.getElementById('cuerpoItems').innerHTML.trim()) agregarFila(); };
+
