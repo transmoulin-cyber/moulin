@@ -249,32 +249,51 @@ window.reimprimirGuia = (num) => {
 };
 
 function imprimir(g) {
-    // Generar filas HTML
+    // 1. Generar filas de la tabla
     let itemsH = g.items.map(i => `
         <tr>
-            <td align="center" style="border:1px solid #000; padding:4px;">${i.c || i.cant}</td>
-            <td style="border:1px solid #000; padding:4px;">${i.t || i.tipo}</td>
-            <td style="border:1px solid #000; padding:4px;">${i.d || i.det}</td>
-            <td align="right" style="border:1px solid #000; padding:4px;">$${i.u || i.unit}</td>
-            <td align="right" style="border:1px solid #000; padding:4px;">$${i.vd || i.v_decl || 0}</td>
+            <td align="center" style="border:1px solid #000; padding:3px;">${i.c || i.cant}</td>
+            <td style="border:1px solid #000; padding:3px;">${i.t || i.tipo}</td>
+            <td style="border:1px solid #000; padding:3px;">${i.d || i.det}</td>
+            <td align="right" style="border:1px solid #000; padding:3px;">$${i.u || i.unit}</td>
+            <td align="right" style="border:1px solid #000; padding:3px;">$${i.vd || i.v_decl || 0}</td>
         </tr>`).join('');
 
     let extraCR = (g.cr_activo === "SI") ? `<br><b style="background:black; color:white; padding:2px;">C. REEMBOLSO: $${g.cr_monto}</b>` : "";
 
-    // HTML de la ventana nueva
+    // 2. Generar el QR (Contiene Guía, Destino y Bultos)
+    const datosQR = `Guia:${g.num}|Destino:${g.d_l}|Bultos:${g.cant_t}`;
+    const urlQR = `https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=${encodeURIComponent(datosQR)}&choe=UTF-8`;
+
     let html = `
     <html><head><title>GUIA ${g.num}</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
-        .hoja { border: 2px solid #000; height: 11.5cm; padding: 10px; margin-bottom: 20px; box-sizing: border-box; position: relative; }
+        @page { size: auto; margin: 0mm; }
+        body { font-family: Arial, sans-serif; padding: 10px; max-width: 800px; margin: auto; }
+        
+        /* Ajuste de la hoja principal para que entre todo */
+        .hoja { border: 2px solid #000; height: 10.5cm; padding: 10px; margin-bottom: 10px; box-sizing: border-box; position: relative; page-break-after: always; }
+        
         .header { display: flex; align-items: center; border-bottom: 2px solid #000; padding-bottom: 5px; }
-        .datos-grid { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #000; margin: 10px 0; font-size: 13px; }
+        .datos-grid { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #000; margin: 8px 0; font-size: 12px; }
         .col { padding: 5px; }
         .col:first-child { border-right: 1px solid #000; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 5px; }
         th { background: #eee; border: 1px solid #000; padding: 4px; }
-        .footer-print { margin-top: 10px; display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; border-top: 2px solid #000; padding-top: 5px; }
-        .etiqueta { border: 4px dashed #000; padding: 20px; margin-top: 40px; page-break-before: always; display: flex; align-items: center; justify-content: space-between; height: 160px; }
+        .footer-print { margin-top: 8px; display: flex; justify-content: space-between; font-weight: bold; font-size: 13px; border-top: 2px solid #000; padding-top: 5px; }
+        
+        /* 3er CUPÓN: ETIQUETA DE 3.5 CM */
+        .etiqueta-final { 
+            border: 2px dashed #000; 
+            height: 3.5cm; 
+            margin-top: 10px; 
+            padding: 8px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            box-sizing: border-box;
+            background: #fff;
+        }
     </style>
     </head><body>`;
 
@@ -282,29 +301,21 @@ function imprimir(g) {
         html += `
         <div class="hoja">
             <div class="header">
-                <img src="logo.png" style="height:50px;" onerror="this.style.display='none'"> 
+                <img src="logo.png" style="height:40px;" onerror="this.style.display='none'"> 
                 <div style="margin-left:15px;">
-                    <b style="font-size:20px;">TRANSPORTE MOULIN</b><br>
+                    <b style="font-size:18px;">TRANSPORTE MOULIN</b><br>
                     <small>Fletes y Encomiendas</small>
                 </div>
                 <div style="margin-left:auto; text-align:right;">
                     <small>${tipo}</small><br>
-                    <b style="font-size:24px; color:black;">${g.num}</b><br>
+                    <b style="font-size:22px;">${g.num}</b><br>
                     ${g.fecha}
                 </div>
             </div>
 
             <div class="datos-grid">
-                <div class="col">
-                    <b>REMITENTE:</b><br>
-                    ${g.r_n}<br>
-                    <small>${g.r_l} - ${g.r_t || ''}</small>
-                </div>
-                <div class="col">
-                    <b>DESTINATARIO:</b><br>
-                    ${g.d_n}<br>
-                    <small>${g.d_l} - ${g.d_t || ''}</small>
-                </div>
+                <div class="col"><b>REMITENTE:</b><br>${g.r_n}<br><small>${g.r_l}</small></div>
+                <div class="col"><b>DESTINATARIO:</b><br>${g.d_n}<br><small>${g.d_l}</small></div>
             </div>
 
             <table>
@@ -313,19 +324,38 @@ function imprimir(g) {
             </table>
 
             <div class="footer-print">
-                <div>
-                    BULTOS: ${g.cant_t} <br> 
-                    CONDICION: ${g.condicion} (${g.pago_en})
-                    ${extraCR}
+                <div>BULTOS: ${g.cant_t} | ${g.condicion}${extraCR}</div>
+                <div style="font-size: 16px;">TOTAL: $${g.total}</div>
+            </div>
+
+            <div class="etiqueta-final">
+                <div style="text-align:center;">
+                    <img src="${urlQR}" width="90">
+                    <br><b style="font-size:10px;">${g.num}</b>
                 </div>
-                <div style="font-size: 18px;">TOTAL: $${g.total}</div>
+                <div style="flex-grow:1; margin-left:15px;">
+                    <small>DESTINO:</small><br>
+                    <b style="font-size:24px;">${g.d_l}</b><br>
+                    <b style="font-size:14px;">${g.d_n}</b>
+                </div>
+                <div style="text-align:right;">
+                    <small>BULTOS:</small><br>
+                    <b style="font-size:35px;">${g.cant_t}</b>
+                </div>
             </div>
             
-            <div style="position: absolute; bottom: 5px; width: 100%; text-align: center; font-size: 10px;">
+            <div style="position: absolute; bottom: 3px; width: 100%; text-align: center; font-size: 9px; opacity: 0.7;">
                 Firma Conforme: _____________________________ Aclaración: ____________________
             </div>
         </div>`;
     });
+
+    html += `<script>window.onload = function() { window.print(); setTimeout(() => window.close(), 500); }<\/script></body></html>`;
+
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+}
 
     // Etiqueta para pegar
     html += `
@@ -522,3 +552,4 @@ document.querySelectorAll('.nav-tabs button').forEach(btn => {
 // Inicialización
 if(document.getElementById('add-item')) document.getElementById('add-item').addEventListener('click', agregarFila);
 window.onload = () => { if(document.getElementById('cuerpoItems')) agregarFila(); };
+
