@@ -214,6 +214,8 @@ function imprimir(g) {
             </table>
             <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold; font-size:14px;">
                 <div>BULTOS: ${g.cant_t} | ${g.condicion}</div>
+                ${g.cr_activo === 'SI' ? `<br><b style="color:red; font-size:16px;">COBRAR C/R: $${g.cr_monto}</b>` : ''}
+            </div>
                 <div style="text-align:right;">TOTAL: $${g.total}</div>
             </div>
             <div style="margin-top:auto; text-align:right;"><div style="border-top:1px solid #000; width:200px; text-align:center; margin-left:auto; font-size:11px;">Firma Receptor</div></div>
@@ -304,9 +306,47 @@ window.pasarRetiroAGuia = (id) => {
 function renderTablaClientes() {
     const tbody = document.getElementById('cuerpoTablaClientes');
     if(!tbody) return;
-    tbody.innerHTML = window.clientesGlobales.slice(0, 30).map(c => `<tr><td>${c.nombre || c.n}</td><td>${c.localidad || c.l}</td><td>-</td><td>-</td></tr>`).join('');
+
+    // 1. Mapeamos los clientes y calculamos su deuda del historial global
+    const listaConSaldos = window.clientesGlobales.map(cliente => {
+        const nombreCliente = cliente.nombre || cliente.n;
+        
+        // Filtramos las guías de este cliente que sean CTA CTE y donde él sea el deudor
+        const deudaTotal = historialGlobal
+            .filter(g => g.cliente_deuda === nombreCliente && g.condicion === "CTA CTE")
+            .reduce((sum, g) => sum + parseFloat(g.total || 0), 0);
+
+        return { ...cliente, saldo: deudaTotal };
+    });
+
+    // 2. Ordenamos para que los que más deben aparezcan arriba
+    listaConSaldos.sort((a, b) => b.saldo - a.saldo);
+
+    // 3. Dibujamos la tabla
+    tbody.innerHTML = listaConSaldos.map(c => `
+        <tr>
+            <td><b>${c.nombre || c.n}</b></td>
+            <td>${c.direccion || c.d || '-'}</td>
+            <td>${c.localidad || c.l || '-'}</td>
+            <td style="color: ${c.saldo > 0 ? 'red' : 'green'}; font-weight: bold;">
+                $ ${c.saldo.toLocaleString('es-AR')}
+            </td>
+            <td>
+                <button onclick="verDetalleCliente('${c.nombre || c.n}')" title="Ver Detalles">👁️</button>
+            </td>
+        </tr>
+    `).join('');
 }
 
+// Función extra para ver qué guías debe (podes poner un alert o consola por ahora)
+window.verDetalleCliente = (nombre) => {
+    const guiasDebidas = historialGlobal.filter(g => g.cliente_deuda === nombre && g.condicion === "CTA CTE");
+    let mensaje = `Guías pendientes para ${nombre}:\n\n`;
+    guiasDebidas.forEach(g => {
+        mensaje += `- Guía ${g.num}: $${g.total} (${g.fecha})\n`;
+    });
+    alert(guiasDebidas.length > 0 ? mensaje : "Este cliente no tiene deudas pendientes.");
+};
 // 8. TABS
 document.querySelectorAll('.nav-tabs button').forEach(btn => {
     btn.onclick = () => {
@@ -318,6 +358,7 @@ document.querySelectorAll('.nav-tabs button').forEach(btn => {
 
 window.onload = () => { if(document.getElementById('cuerpoItems')) window.agregarFila(); };
 if(document.getElementById('add-item')) document.getElementById('add-item').onclick = window.agregarFila;
+
 
 
 
