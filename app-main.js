@@ -126,51 +126,44 @@ function calcularTotales() {
 }
 
 // 5. EMISIÓN
+// 5. EMISIÓN (Actualizado para Cta Cte y C/R)
+const btnEmitir = document.getElementById('btn-emitir');
 if (btnEmitir) {
     btnEmitir.onclick = async () => {
         const r_n = document.getElementById('r_n').value.trim();
         const d_n = document.getElementById('d_n').value.trim();
-        const pago_en = document.getElementById('pago_en').value; // "PAGO EN ORIGEN" o "PAGO EN DESTINO"
-        const condicion = document.getElementById('condicion').value; // "CONTADO" o "CTA CTE"
+        const pago_en = document.getElementById('pago_en').value;
+        const condicion = document.getElementById('condicion').value;
         
-        if(!r_n || !d_n) return alert("⚠️ Faltan datos de clientes.");
+        if(!r_n || !d_n) return alert("⚠️ Faltan datos del Remitente o Destinatario.");
 
         const tot = calcularTotales();
-        
-        // --- LÓGICA DE CUENTA CORRIENTE AUTOMÁTICA ---
+
+        // LÓGICA DE CUENTA CORRIENTE
         let cliente_deuda = "";
         if (condicion === "CTA CTE") {
-            // Si el pago es en origen, el responsable es el Remitente, si es en destino, el Destinatario
-            cliente_deuda = (pago_en.includes("ORIGEN")) ? r_n : d_n;
+            // Si el pago es en origen debe el remitente, sino el destinatario
+            cliente_deuda = (pago_en === "PAGO EN ORIGEN") ? r_n : d_n;
         }
 
         const guia = {
             num: document.getElementById('display_guia').innerText,
-            fecha: new Date().toLocaleDateString(),
-            // Datos Remitente
+            fecha: new Date().toLocaleDateString('es-AR'), // Fecha prolija
+            timestamp: Date.now(),
             r_n, 
             r_d: document.getElementById('r_d').value, 
             r_l: document.getElementById('r_l').value,
-            r_t: document.getElementById('r_t').value,
-            // Datos Destinatario
             d_n, 
             d_d: document.getElementById('d_d').value, 
             d_l: document.getElementById('d_l').value,
-            d_t: document.getElementById('d_t').value,
-            // Totales y Condición
             total: tot.total.toFixed(2), 
-            flete: tot.flete.toFixed(2),
-            seg_monto: tot.seg.toFixed(2),
             cant_t: tot.cant_t,
             pago_en, 
             condicion,
-            cliente_deuda, // <--- ACÁ ESTÁ EL SECRETO PARA LA PLANILLA MENSUAL
-            // Contra Reembolso
-            cr_activo: document.getElementById('cr_act').value, // "S" o "N"
-            cr_monto: document.getElementById('cr_monto')?.value || "0",
-            // Otros
-            emisor: NOMBRE_OP,
-            estado: 'recibido',
+            cliente_deuda, // Para tu planilla de cobranzas
+            cr_activo: document.getElementById('cr_activo').value,
+            cr_monto: document.getElementById('cr_monto').value || "0",
+            operador: NOMBRE_OP,
             items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(tr => ({
                 c: tr.querySelector('.i-cant').value, 
                 t: tr.querySelector('.i-tipo').value, 
@@ -180,14 +173,15 @@ if (btnEmitir) {
             }))
         };
 
-        // Guardamos en Firebase
-        const idU = Date.now();
-        await set(ref(db, `moulin/guias/${idU}`), guia);
-        
-        // Si el retiro existía, podríamos marcarlo como "Realizado" aquí (opcional)
-        
-        imprimir(guia);
-        setTimeout(() => location.reload(), 1000);
+        try {
+            await set(ref(db, `moulin/guias/${guia.timestamp}`), guia);
+            imprimir(guia);
+            alert("Guía Guardada Correctamente");
+            location.reload();
+        } catch (error) {
+            console.error("Error al guardar:", error);
+            alert("Error al conectar con Firebase");
+        }
     };
 }
 
@@ -324,5 +318,6 @@ document.querySelectorAll('.nav-tabs button').forEach(btn => {
 
 window.onload = () => { if(document.getElementById('cuerpoItems')) window.agregarFila(); };
 if(document.getElementById('add-item')) document.getElementById('add-item').onclick = window.agregarFila;
+
 
 
