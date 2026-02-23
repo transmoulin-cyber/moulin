@@ -126,21 +126,51 @@ function calcularTotales() {
 }
 
 // 5. EMISIÓN
-const btnEmitir = document.getElementById('btn-emitir');
 if (btnEmitir) {
     btnEmitir.onclick = async () => {
         const r_n = document.getElementById('r_n').value.trim();
         const d_n = document.getElementById('d_n').value.trim();
-        if(!r_n || !d_n) return alert("⚠️ Faltan datos.");
+        const pago_en = document.getElementById('pago_en').value; // "PAGO EN ORIGEN" o "PAGO EN DESTINO"
+        const condicion = document.getElementById('condicion').value; // "CONTADO" o "CTA CTE"
+        
+        if(!r_n || !d_n) return alert("⚠️ Faltan datos de clientes.");
+
         const tot = calcularTotales();
+        
+        // --- LÓGICA DE CUENTA CORRIENTE AUTOMÁTICA ---
+        let cliente_deuda = "";
+        if (condicion === "CTA CTE") {
+            // Si el pago es en origen, el responsable es el Remitente, si es en destino, el Destinatario
+            cliente_deuda = (pago_en.includes("ORIGEN")) ? r_n : d_n;
+        }
+
         const guia = {
             num: document.getElementById('display_guia').innerText,
             fecha: new Date().toLocaleDateString(),
-            r_n, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value,
-            d_n, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value,
-            total: tot.total.toFixed(2), cant_t: tot.cant_t,
-            pago_en: document.getElementById('pago_en').value,
-            condicion: document.getElementById('condicion').value,
+            // Datos Remitente
+            r_n, 
+            r_d: document.getElementById('r_d').value, 
+            r_l: document.getElementById('r_l').value,
+            r_t: document.getElementById('r_t').value,
+            // Datos Destinatario
+            d_n, 
+            d_d: document.getElementById('d_d').value, 
+            d_l: document.getElementById('d_l').value,
+            d_t: document.getElementById('d_t').value,
+            // Totales y Condición
+            total: tot.total.toFixed(2), 
+            flete: tot.flete.toFixed(2),
+            seg_monto: tot.seg.toFixed(2),
+            cant_t: tot.cant_t,
+            pago_en, 
+            condicion,
+            cliente_deuda, // <--- ACÁ ESTÁ EL SECRETO PARA LA PLANILLA MENSUAL
+            // Contra Reembolso
+            cr_activo: document.getElementById('cr_act').value, // "S" o "N"
+            cr_monto: document.getElementById('cr_monto')?.value || "0",
+            // Otros
+            emisor: NOMBRE_OP,
+            estado: 'recibido',
             items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(tr => ({
                 c: tr.querySelector('.i-cant').value, 
                 t: tr.querySelector('.i-tipo').value, 
@@ -149,7 +179,13 @@ if (btnEmitir) {
                 vd: tr.querySelector('.i-decl').value
             }))
         };
-        await set(ref(db, `moulin/guias/${Date.now()}`), guia);
+
+        // Guardamos en Firebase
+        const idU = Date.now();
+        await set(ref(db, `moulin/guias/${idU}`), guia);
+        
+        // Si el retiro existía, podríamos marcarlo como "Realizado" aquí (opcional)
+        
         imprimir(guia);
         setTimeout(() => location.reload(), 1000);
     };
@@ -231,22 +267,46 @@ function imprimir(g) {
 }
 
 // 7. RENDERS
-function renderHistorial() {
-    const tbody = document.getElementById('listaHistorial');
-    if(!tbody) return;
-    tbody.innerHTML = historialGlobal.slice(0, 20).map(g => `
-        <tr><td>${g.num}</td><td>${g.fecha}</td><td>${g.d_l}</td><td>${g.estado || 'Recibido'}</td>
-        <td><button onclick="window.reimprimir('${g.num}')">🖨️</button></td></tr>`).join('');
-}
-window.reimprimir = (num) => { const g = historialGlobal.find(x => x.num === num); if(g) imprimir(g); };
-
+// Función para dibujar la lista de retiros
 function renderRetiros() {
     const div = document.getElementById('listaRetiros');
     if(!div) return;
-    div.innerHTML = retirosGlobal.map(r => `<div class="caja"><b>${r.cliente}</b> - ${r.direccion} <button onclick="window.completarRetiro('${r.id}')">✅</button></div>`).join('');
+    
+    // Solo mostramos los que no están realizados
+    const pendientes = retirosGlobal.filter(r => r.estado !== "Realizado");
+    
+    div.innerHTML = pendientes.map(r => `
+        <div class="caja" style="display:flex; justify-content:space-between; align-items:center; border-left: 5px solid #ff9800;">
+            <div>
+                <b style="font-size:14px;">${r.cliente || r.n || 'S/N'}</b><br>
+                <small>${r.direccion || r.d || ''} (${r.localidad || r.l || ''})</small>
+            </div>
+            <button onclick="window.pasarRetiroAGuia('${r.id}')" style="background:#48bb78; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                USAR ➔
+            </button>
+        </div>
+    `).join('');
 }
-window.completarRetiro = (id) => update(ref(db, `moulin/retiros/${id}`), { estado: "Realizado" });
 
+// La función "mágica" que traslada los datos
+window.pasarRetiroAGuia = (id) => {
+    const r = retirosGlobal.find(x => x.id === id);
+    if(!r) return;
+
+    // 1. Llenamos los campos de Remitente
+    document.getElementById('r_n').value = r.cliente || r.n || "";
+    document.getElementById('r_d').value = r.direccion || r.d || "";
+    document.getElementById('r_l').value = r.localidad || r.l || "";
+    document.getElementById('r_t').value = r.telefono || r.t || "";
+
+    // 2. Cambiamos a la pestaña de Nueva Guía
+    // Buscamos el botón de la tab "emision" y le hacemos clic
+    const tabBtn = document.querySelector('button[data-tab="emision"]');
+    if(tabBtn) tabBtn.click();
+
+    // 3. (Opcional) Marcamos el retiro como "En Proceso" o lo dejamos para borrar después
+    console.log("Datos de retiro cargados para:", r.cliente);
+};
 function renderTablaClientes() {
     const tbody = document.getElementById('cuerpoTablaClientes');
     if(!tbody) return;
@@ -264,4 +324,5 @@ document.querySelectorAll('.nav-tabs button').forEach(btn => {
 
 window.onload = () => { if(document.getElementById('cuerpoItems')) window.agregarFila(); };
 if(document.getElementById('add-item')) document.getElementById('add-item').onclick = window.agregarFila;
+
 
