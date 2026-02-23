@@ -77,14 +77,10 @@ const ejecutarAutocompletado = (idInput, prefijo) => {
         const val = e.target.value;
         const cliente = window.clientesGlobales.find(c => (c.nombre || c.n) === val);
         if (cliente) {
-            const d_d = cliente.direccion || cliente.d || '';
-            const d_l = cliente.localidad || cliente.l || '';
-            const d_t = cliente.telefono || cliente.t || '';
-            const d_cbu = cliente.cbu || cliente.alias || '';
-            if(document.getElementById(`${prefijo}_d`)) document.getElementById(`${prefijo}_d`).value = d_d;
-            if(document.getElementById(`${prefijo}_l`)) document.getElementById(`${prefijo}_l`).value = d_l;
-            if(document.getElementById(`${prefijo}_t`)) document.getElementById(`${prefijo}_t`).value = d_t;
-            if(document.getElementById(`${prefijo}_cbu`)) document.getElementById(`${prefijo}_cbu`).value = d_cbu;
+            if(document.getElementById(`${prefijo}_d`)) document.getElementById(`${prefijo}_d`).value = cliente.direccion || cliente.d || '';
+            if(document.getElementById(`${prefijo}_l`)) document.getElementById(`${prefijo}_l`).value = cliente.localidad || cliente.l || '';
+            if(document.getElementById(`${prefijo}_t`)) document.getElementById(`${prefijo}_t`).value = cliente.telefono || cliente.t || '';
+            if(document.getElementById(`${prefijo}_cbu`)) document.getElementById(`${prefijo}_cbu`).value = cliente.cbu || cliente.alias || '';
         }
     });
 };
@@ -126,7 +122,6 @@ function calcularTotales() {
 }
 
 // 5. EMISIÓN
-// 5. EMISIÓN (Actualizado para Cta Cte y C/R)
 const btnEmitir = document.getElementById('btn-emitir');
 if (btnEmitir) {
     btnEmitir.onclick = async () => {
@@ -138,29 +133,16 @@ if (btnEmitir) {
         if(!r_n || !d_n) return alert("⚠️ Faltan datos del Remitente o Destinatario.");
 
         const tot = calcularTotales();
-
-        // LÓGICA DE CUENTA CORRIENTE
-        let cliente_deuda = "";
-        if (condicion === "CTA CTE") {
-            // Si el pago es en origen debe el remitente, sino el destinatario
-            cliente_deuda = (pago_en === "PAGO EN ORIGEN") ? r_n : d_n;
-        }
+        let cliente_deuda = (condicion === "CTA CTE") ? (pago_en === "PAGO EN ORIGEN" ? r_n : d_n) : "";
 
         const guia = {
             num: document.getElementById('display_guia').innerText,
-            fecha: new Date().toLocaleDateString('es-AR'), // Fecha prolija
+            fecha: new Date().toLocaleDateString('es-AR'),
             timestamp: Date.now(),
-            r_n, 
-            r_d: document.getElementById('r_d').value, 
-            r_l: document.getElementById('r_l').value,
-            d_n, 
-            d_d: document.getElementById('d_d').value, 
-            d_l: document.getElementById('d_l').value,
-            total: tot.total.toFixed(2), 
-            cant_t: tot.cant_t,
-            pago_en, 
-            condicion,
-            cliente_deuda, // Para tu planilla de cobranzas
+            r_n, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value,
+            d_n, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value,
+            total: tot.total.toFixed(2), cant_t: tot.cant_t,
+            pago_en, condicion, cliente_deuda,
             cr_activo: document.getElementById('cr_activo').value,
             cr_monto: document.getElementById('cr_monto').value || "0",
             operador: NOMBRE_OP,
@@ -176,189 +158,91 @@ if (btnEmitir) {
         try {
             await set(ref(db, `moulin/guias/${guia.timestamp}`), guia);
             imprimir(guia);
-            alert("Guía Guardada Correctamente");
             location.reload();
-        } catch (error) {
-            console.error("Error al guardar:", error);
-            alert("Error al conectar con Firebase");
-        }
+        } catch (e) { alert("Error al guardar"); }
     };
 }
 
-// 6. IMPRESIÓN ÚNICA Y CORREGIDA
+// 6. IMPRESIÓN
 function imprimir(g) {
-    // 1. Cargamos el motor del QR dentro de la nueva ventana
     const qrScript = `<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>`;
-    
     const itemsH = g.items.map(i => `<tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d}</td><td align="right">$${i.u}</td><td align="right">$${i.vd || 0}</td></tr>`).join('');
     let html = "";
 
     ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit) => {
-        html += `<div style="height: 10.5cm; border: 1px solid #000; padding: 10px; margin-bottom: 10px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; font-family: Arial;">
+        html += `<div style="height: 10.5cm; border: 1px solid #000; padding: 10px; margin-bottom: 10px; box-sizing: border-box; display: flex; flex-direction: column; font-family: Arial;">
             <div style="display:flex; align-items:center;">
-                <img src="logo.png" style="height:45px;" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
-                <b style="font-size:18px; margin-left:10px;">TRANSPORTE MOULIN</b>
+                <b style="font-size:18px;">TRANSPORTE MOULIN</b>
                 <div style="margin-left:auto; text-align:right;"><small>${tit}</small><br><b style="font-size:22px; color:red;">${g.num}</b><br><b>${g.fecha}</b></div>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:8px 0; padding:8px; line-height:1.4; font-size:12px;">
-                <div style="border-right:1px solid #000; padding-right:8px;">
-                    <b>REMITENTE:</b> ${g.r_n}<br>Loc: <span style="background:#eee; font-weight:bold;">${g.r_l}</span>
-                </div>
-                <div style="padding-left:8px;">
-                    <b>DESTINATARIO:</b> ${g.d_n}<br>Loc: <span style="background:#eee; font-weight:bold;">${g.d_l}</span>
-                </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:8px 0; padding:8px; font-size:12px;">
+                <div style="border-right:1px solid #000; padding-right:8px;"><b>REMITENTE:</b> ${g.r_n}<br>Loc: ${g.r_l}</div>
+                <div style="padding-left:8px;"><b>DESTINATARIO:</b> ${g.d_n}<br>Loc: ${g.d_l}</div>
             </div>
             <table style="width:100%; border-collapse:collapse; font-size:11px; border:1px solid #000;">
                 <thead><tr style="background:#eee;"><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unit</th><th>V.Decl</th></tr></thead>
                 <tbody>${itemsH}</tbody>
             </table>
             <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold; font-size:14px;">
-                <div>BULTOS: ${g.cant_t} | ${g.condicion}</div>
-                ${g.cr_activo === 'SI' ? `<br><b style="color:red; font-size:16px;">COBRAR C/R: $${g.cr_monto}</b>` : ''}
-            </div>
+                <div>BULTOS: ${g.cant_t} | ${g.condicion} ${g.cr_activo === 'SI' ? `<br><span style="color:red;">C/R: $${g.cr_monto}</span>` : ''}</div>
                 <div style="text-align:right;">TOTAL: $${g.total}</div>
             </div>
             <div style="margin-top:auto; text-align:right;"><div style="border-top:1px solid #000; width:200px; text-align:center; margin-left:auto; font-size:11px;">Firma Receptor</div></div>
         </div>`;
     });
 
-    // ETIQUETA - Espacio para el QR con ID único
-    html += `<div style="height: 3.5cm; border: 2px dashed #000; padding: 5px; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; overflow: hidden; font-family: Arial;">
-        <div style="width:33%;">
-            <small>DESTINO:</small><br><b style="font-size:14px;">${g.d_n}</b><br><b style="font-size:16px; background:#eee;">${g.d_l}</b>
-        </div>
-        <div style="width:33%; display:flex; flex-direction:column; align-items:center;">
-            <div id="qrcode_final"></div>
-            <b style="font-size:13px; margin-top:2px;">${g.num}</b>
-        </div>
-        <div style="width:33%; text-align:right;">
-            <small>ORIGEN:</small> <b style="background:#eee;">${g.r_l}</b><br>
-            <div style="border: 2px solid #000; display: inline-block; padding: 5px; margin-top:5px;">
-                BULTOS: <b style="font-size:22px;">${g.cant_t}</b>
-            </div>
-        </div>
-    </div>`;
-
     const win = window.open('', '_blank');
-    win.document.write(`<html><head>${qrScript}<style>@page { size: auto; margin: 0.5cm; } body { margin: 0; }</style></head><body>
-        ${html}
-        <script>
-            // Función que genera el QR una vez que la librería carga
-            function generar() {
-                if(typeof QRCode !== "undefined") {
-                    new QRCode(document.getElementById("qrcode_final"), {
-                        text: "${g.num}",
-                        width: 70,
-                        height: 70
-                    });
-                    setTimeout(() => { window.print(); window.close(); }, 500);
-                } else {
-                    setTimeout(generar, 100);
-                }
-            }
-            window.onload = generar;
-        </script>
-    </body></html>`);
+    win.document.write(`<html><head>${qrScript}</head><body>${html}<script>window.onload = () => { window.print(); window.close(); }</script></body></html>`);
     win.document.close();
 }
 
 // 7. RENDERS
-// Función para dibujar la lista de retiros
+function renderHistorial() {
+    const tbody = document.getElementById('listaHistorial');
+    if(!tbody) return;
+    tbody.innerHTML = historialGlobal.slice(0, 15).map(g => `
+        <tr><td>${g.num}</td><td>${g.fecha}</td><td>${g.d_l}</td><td>${g.condicion}</td>
+        <td><button onclick="window.reimprimir('${g.num}')">🖨️</button></td></tr>`).join('');
+}
+window.reimprimir = (num) => { const g = historialGlobal.find(x => x.num === num); if(g) imprimir(g); };
+
 function renderRetiros() {
     const div = document.getElementById('listaRetiros');
     if(!div) return;
-    
-    // Solo mostramos los que no están realizados
     const pendientes = retirosGlobal.filter(r => r.estado !== "Realizado");
-    
     div.innerHTML = pendientes.map(r => `
-        <div class="caja" style="display:flex; justify-content:space-between; align-items:center; border-left: 5px solid #ff9800;">
-            <div>
-                <b style="font-size:14px;">${r.cliente || r.n || 'S/N'}</b><br>
-                <small>${r.direccion || r.d || ''} (${r.localidad || r.l || ''})</small>
-            </div>
-            <button onclick="window.pasarRetiroAGuia('${r.id}')" style="background:#48bb78; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">
-                USAR ➔
-            </button>
-        </div>
-    `).join('');
+        <div class="caja" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; padding:10px; border-left:5px solid orange;">
+            <div><b>${r.cliente || r.n}</b><br><small>${r.direccion} (${r.localidad})</small></div>
+            <button onclick="window.pasarRetiroAGuia('${r.id}')" style="background:green; color:white; border:none; padding:5px 10px; cursor:pointer;">USAR ➔</button>
+        </div>`).join('');
 }
 
-// La función "mágica" que traslada los datos
 window.pasarRetiroAGuia = (id) => {
     const r = retirosGlobal.find(x => x.id === id);
     if(!r) return;
-
-    // 1. Llenamos los campos de Remitente
     document.getElementById('r_n').value = r.cliente || r.n || "";
-    document.getElementById('r_d').value = r.direccion || r.d || "";
-    document.getElementById('r_l').value = r.localidad || r.l || "";
-    document.getElementById('r_t').value = r.telefono || r.t || "";
-
-    // 2. Cambiamos a la pestaña de Nueva Guía
-    // Buscamos el botón de la tab "emision" y le hacemos clic
-    const tabBtn = document.querySelector('button[data-tab="emision"]');
-    if(tabBtn) tabBtn.click();
-
-    // 3. (Opcional) Marcamos el retiro como "En Proceso" o lo dejamos para borrar después
-    console.log("Datos de retiro cargados para:", r.cliente);
+    document.getElementById('r_d').value = r.direccion || "";
+    document.getElementById('r_l').value = r.localidad || "";
+    document.getElementById('r_t').value = r.telefono || "";
+    document.getElementById('btn-guia').click(); // Cambia a pestaña guia
 };
+
 function renderTablaClientes() {
     const tbody = document.getElementById('cuerpoTablaClientes');
     if(!tbody) return;
-
-    // 1. Mapeamos los clientes y calculamos su deuda del historial global
-    const listaConSaldos = window.clientesGlobales.map(cliente => {
-        const nombreCliente = cliente.nombre || cliente.n;
-        
-        // Filtramos las guías de este cliente que sean CTA CTE y donde él sea el deudor
-        const deudaTotal = historialGlobal
-            .filter(g => g.cliente_deuda === nombreCliente && g.condicion === "CTA CTE")
-            .reduce((sum, g) => sum + parseFloat(g.total || 0), 0);
-
-        return { ...cliente, saldo: deudaTotal };
-    });
-
-    // 2. Ordenamos para que los que más deben aparezcan arriba
-    listaConSaldos.sort((a, b) => b.saldo - a.saldo);
-
-    // 3. Dibujamos la tabla
-    tbody.innerHTML = listaConSaldos.map(c => `
-        <tr>
-            <td><b>${c.nombre || c.n}</b></td>
-            <td>${c.direccion || c.d || '-'}</td>
-            <td>${c.localidad || c.l || '-'}</td>
-            <td style="color: ${c.saldo > 0 ? 'red' : 'green'}; font-weight: bold;">
-                $ ${c.saldo.toLocaleString('es-AR')}
-            </td>
-            <td>
-                <button onclick="verDetalleCliente('${c.nombre || c.n}')" title="Ver Detalles">👁️</button>
-            </td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = window.clientesGlobales.slice(0, 20).map(c => `
+        <tr><td>${c.nombre || c.n}</td><td>${c.direccion || c.d}</td><td>${c.localidad || c.l}</td><td>-</td><td>-</td></tr>`).join('');
 }
 
-// Función extra para ver qué guías debe (podes poner un alert o consola por ahora)
-window.verDetalleCliente = (nombre) => {
-    const guiasDebidas = historialGlobal.filter(g => g.cliente_deuda === nombre && g.condicion === "CTA CTE");
-    let mensaje = `Guías pendientes para ${nombre}:\n\n`;
-    guiasDebidas.forEach(g => {
-        mensaje += `- Guía ${g.num}: $${g.total} (${g.fecha})\n`;
-    });
-    alert(guiasDebidas.length > 0 ? mensaje : "Este cliente no tiene deudas pendientes.");
-};
-// 8. TABS
+// 8. TABS (Corregido para coincidir con IDs del HTML)
 document.querySelectorAll('.nav-tabs button').forEach(btn => {
     btn.onclick = () => {
         document.querySelectorAll('.nav-tabs button, .tab-content').forEach(el => el.classList.remove('active'));
         btn.classList.add('active');
-        document.getElementById(btn.dataset.tab).classList.add('active');
+        const targetId = btn.getAttribute('data-tab'); 
+        document.getElementById(targetId).classList.add('active');
     };
 });
 
 window.onload = () => { if(document.getElementById('cuerpoItems')) window.agregarFila(); };
 if(document.getElementById('add-item')) document.getElementById('add-item').onclick = window.agregarFila;
-
-
-
-
