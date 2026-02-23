@@ -157,8 +157,10 @@ if (btnEmitir) {
 
 // 6. IMPRESIÓN ÚNICA Y CORREGIDA
 function imprimir(g) {
+    // 1. Cargamos el motor del QR dentro de la nueva ventana
+    const qrScript = `<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>`;
+    
     const itemsH = g.items.map(i => `<tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d}</td><td align="right">$${i.u}</td><td align="right">$${i.vd || 0}</td></tr>`).join('');
-    const urlQR = `https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=${encodeURIComponent(g.num)}&choe=UTF-8`;
     let html = "";
 
     ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit) => {
@@ -184,16 +186,18 @@ function imprimir(g) {
                 <div>BULTOS: ${g.cant_t} | ${g.condicion}</div>
                 <div style="text-align:right;">TOTAL: $${g.total}</div>
             </div>
-            <div style="margin-top:auto; text-align:right;"><div style="border-top:1px solid #000; width:200px; text-align:center; margin-left:auto; font-size:11px;">Firma y Aclaración Receptor</div></div>
+            <div style="margin-top:auto; text-align:right;"><div style="border-top:1px solid #000; width:200px; text-align:center; margin-left:auto; font-size:11px;">Firma Receptor</div></div>
         </div>`;
     });
 
+    // ETIQUETA - Espacio para el QR con ID único
     html += `<div style="height: 3.5cm; border: 2px dashed #000; padding: 5px; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; overflow: hidden; font-family: Arial;">
         <div style="width:33%;">
             <small>DESTINO:</small><br><b style="font-size:14px;">${g.d_n}</b><br><b style="font-size:16px; background:#eee;">${g.d_l}</b>
         </div>
-        <div style="width:33%; text-align:center;">
-            <img src="${urlQR}" style="width:80px; height:80px;"><br><b style="font-size:13px;">${g.num}</b>
+        <div style="width:33%; display:flex; flex-direction:column; align-items:center;">
+            <div id="qrcode_final"></div>
+            <b style="font-size:13px; margin-top:2px;">${g.num}</b>
         </div>
         <div style="width:33%; text-align:right;">
             <small>ORIGEN:</small> <b style="background:#eee;">${g.r_l}</b><br>
@@ -204,9 +208,26 @@ function imprimir(g) {
     </div>`;
 
     const win = window.open('', '_blank');
-    win.document.write(`<html><head><style>@page { size: auto; margin: 0.5cm; } body { margin: 0; }</style></head><body>${html}</body></html>`);
+    win.document.write(`<html><head>${qrScript}<style>@page { size: auto; margin: 0.5cm; } body { margin: 0; }</style></head><body>
+        ${html}
+        <script>
+            // Función que genera el QR una vez que la librería carga
+            function generar() {
+                if(typeof QRCode !== "undefined") {
+                    new QRCode(document.getElementById("qrcode_final"), {
+                        text: "${g.num}",
+                        width: 70,
+                        height: 70
+                    });
+                    setTimeout(() => { window.print(); window.close(); }, 500);
+                } else {
+                    setTimeout(generar, 100);
+                }
+            }
+            window.onload = generar;
+        </script>
+    </body></html>`);
     win.document.close();
-    win.onload = () => { win.print(); setTimeout(() => win.close(), 500); };
 }
 
 // 7. RENDERS
@@ -243,3 +264,4 @@ document.querySelectorAll('.nav-tabs button').forEach(btn => {
 
 window.onload = () => { if(document.getElementById('cuerpoItems')) window.agregarFila(); };
 if(document.getElementById('add-item')) document.getElementById('add-item').onclick = window.agregarFila;
+
