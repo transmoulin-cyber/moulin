@@ -44,15 +44,7 @@
                 </div>
             </section>
 
-            <section class="caja">
-                <table class="tabla-items">
-                    <thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>$ Unit</th><th>$ V.Decl</th><th></th></tr></thead>
-                    <tbody id="cuerpoItems"></tbody>
-                </table>
-                <button id="add-item" style="background: var(--azul); color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; margin-top: 10px;">+ Agregar Bulto</button>
-            </section>
-
-<section class="caja caja-condiciones">
+           <section class="caja caja-condiciones">
     <div class="campo-cond">
         <label>Lugar de Pago</label>
         <select id="pago_en">
@@ -75,7 +67,7 @@
     </div>
 
     <div class="campo-cond campo-cr">
-        <label>C/R? &nbsp; • &nbsp; Monto</label>
+        <label>C/R • Monto</label>
         <div class="fila-cr">
             <select id="cr_activo" onchange="document.getElementById('cr_monto').style.visibility = (this.value=='SI'?'visible':'hidden')">
                 <option value="NO">NO</option>
@@ -126,6 +118,7 @@
     <script type="module" src="app-main.js"></script>
 </body>
 </html>
+
 
 
 
