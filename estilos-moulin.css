@@ -56,14 +56,14 @@ body {
 }
 
 /* --- CONTENEDORES --- */
-.tab-content { display: none; padding: 20px; }
+.tab-content { display: none; padding: 10px; }
 .tab-content.active { display: block; }
 
 .hoja {
     background: white;
     max-width: 900px;
     margin: auto;
-    padding: 30px;
+    padding: 16px 18px;
     border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.08);
 }
@@ -71,8 +71,8 @@ body {
 .caja {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    padding: 15px;
-    margin-bottom: 20px;
+    padding: 10px;
+    margin-bottom: 12px;
     border-radius: 8px;
 }
 
@@ -81,11 +81,12 @@ body {
 
 input, select, textarea {
     width: 100%;
-    padding: 10px;
-    margin: 5px 0;
+    padding: 6px 7px;
+    margin: 3px 0;
     border: 1px solid #cbd5e1;
     border-radius: 5px;
     box-sizing: border-box;
+    font-size: 13px;
 }
 
 /* Diseño de Pago V8.7 (Fuera de @media print) */
@@ -118,7 +119,7 @@ input, select, textarea {
 /* --- TABLAS --- */
 .tabla-items { width: 100%; border-collapse: collapse; margin-top: 10px; }
 .tabla-items th { background: var(--azul); color: white; padding: 12px; text-align: left; }
-.tabla-items td { padding: 10px; border-bottom: 1px solid #eee; }
+.tabla-items td { padding: 6px; border-bottom: 1px solid #eee; }
 
 /* --- RETIROS (TARJETAS) --- */
 .card-retiro {
@@ -152,7 +153,7 @@ input, select, textarea {
     display: flex;
     justify-content: space-around;
     align-items: center;
-    padding: 20px;
+    padding: 12px 16px;
     box-shadow: 0 -5px 15px rgba(0,0,0,0.2);
 }
 
@@ -194,4 +195,47 @@ input, select, textarea {
         text-align: center;
         border-radius: 10px;
     }
+    .caja-condiciones {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 6px 8px;
 }
+
+.caja-condiciones .campo-cond {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.caja-condiciones .campo-cond label {
+    font-size: 11px;
+    color: var(--azul);
+    font-weight: bold;
+}
+
+.caja-condiciones .campo-seguro {
+    max-width: 80px;
+}
+
+.caja-condiciones .campo-cr {
+    flex: 1.4;
+    min-width: 190px;
+}
+
+.caja-condiciones .fila-cr {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.caja-condiciones .fila-cr select {
+    width: 70px;
+}
+
+.caja-condiciones .fila-cr input {
+    flex: 1;
+}
+
