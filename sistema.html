@@ -180,45 +180,59 @@
 
         window.actualizarEstadoNube = (id, est) => update(ref(db, `moulin/guias/${id}`), { estado: est });
 
-        window.renderHistorial = () => {
-            const busq = document.getElementById('busq').value.toLowerCase();
-            const fDesde = document.getElementById('f_desde').value;
-            const fHasta = document.getElementById('f_hasta').value;
+       window.renderHistorial = () => {
+    const busq = document.getElementById('busq').value.toLowerCase();
+    const fDesde = document.getElementById('f_desde').value;
+    const fHasta = document.getElementById('f_hasta').value;
+    const locElegida = document.getElementById('f_localidad').value; // <--- Captura el nuevo select
 
-            const filtrados = window.historialGlobal.filter(g => {
-                let suc = (PREFIJO_BASE === "ADM" || PREFIJO_BASE === "TODO") || 
+    const filtrados = window.historialGlobal.filter(g => {
+        // 1. Filtro por Sucursal (Seguridad/Permisos)
+        let sucPermitida = (PREFIJO_BASE === "ADM" || PREFIJO_BASE === "TODO") || 
                           (PREFIJO === "RECON" ? (g.num.startsWith("RECON") || g.num.startsWith("REC")) : g.num.startsWith(PREFIJO));
-                let est = (window.filtroEstadoActual === 'todos' || g.estado === window.filtroEstadoActual);
-                let fec = true;
-                if(fDesde || fHasta){
-                    const p = g.fecha.split('/');
-                    const fGuia = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-                    if (fDesde && fGuia < fDesde) fec = false;
-                    if (fHasta && fGuia > fHasta) fec = false;
-                }
-                const b = g.num.toLowerCase().includes(busq) || g.r_n.toLowerCase().includes(busq) || g.d_n.toLowerCase().includes(busq);
-                return suc && est && fec && b;
-            });
+        
+        // 2. Filtro por Estado (Botones de arriba)
+        let est = (window.filtroEstadoActual === 'todos' || g.estado === window.filtroEstadoActual);
+        
+        // 3. NUEVO FILTRO DE LOCALIDAD (El que necesitás para las 7 AM)
+        let cumpleLocalidad = (locElegida === "TODAS") || (g.d_l && g.d_l.toUpperCase().includes(locElegida.toUpperCase()));
 
-            window.datosParaExcel = filtrados;
-            document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map(g => `
-                <tr>
-                    <td><b>${g.num}</b></td>
-                    <td>${g.fecha}</td>
-                    <td>${g.r_n} > ${g.d_n}</td>
-                    <td>$${g.total}</td>
-                    <td>
-                        <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px; background:${g.estado==='entregado'?'#d4edda':'white'}">
-                            <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
-                            <option value="deposito" ${g.estado==='deposito'?'selected':''}>Depósito</option>
-                            <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado</option>
-                        </select>
-                    </td>
-                    <td><button onclick="reimprimir('${g.num}')">🖨️</button></td>
-                </tr>
-            `).join('');
-        };
+        // 4. Filtro por Fecha
+        let fec = true;
+        if(fDesde || fHasta){
+            const p = g.fecha.split('/');
+            const fGuia = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+            if (fDesde && fGuia < fDesde) fec = false;
+            if (fHasta && fGuia > fHasta) fec = false;
+        }
+        
+        // 5. Filtro por Buscador
+        const b = g.num.toLowerCase().includes(busq) || g.r_n.toLowerCase().includes(busq) || g.d_n.toLowerCase().includes(busq);
+        
+        return sucPermitida && est && cumpleLocalidad && fec && b;
+    });
 
+    window.datosParaExcel = filtrados;
+    
+    // El resto de la función (el innerHTML) queda igual, 
+    // pero ahora usará la lista filtrada por localidad.
+    document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map(g => `
+        <tr>
+            <td><b>${g.num}</b></td>
+            <td>${g.fecha}</td>
+            <td>${g.r_n} > ${g.d_n} (${g.d_l})</td>
+            <td>$${g.total}</td>
+            <td>
+                <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px; background:${g.estado==='entregado'?'#d4edda':'white'}">
+                    <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
+                    <option value="deposito" ${g.estado==='deposito'?'selected':''}>Depósito</option>
+                    <option value="entregado" ${g.estado==='entregado'?'selected':''}>Entregado</option>
+                </select>
+            </td>
+            <td><button onclick="reimprimir('${g.num}')">🖨️</button></td>
+        </tr>
+    `).join('');
+};
         window.descargarExcel = () => {
             const data = window.datosParaExcel.map(g => ({ Guia: g.num, Fecha: g.fecha, Origen: g.r_l, Destino: g.d_l, Remitente: g.r_n, Destinatario: g.d_n, Total: g.total, Estado: g.estado }));
             const ws = XLSX.utils.json_to_sheet(data);
@@ -280,14 +294,20 @@
 <body>
 <datalist id="lista_clientes"></datalist>
 <div class="hoja no-print">
-    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid var(--azul); margin-bottom:15px;">
-        <div style="display:flex; align-items:center;">
-            <img src="logo.png" style="height:50px; margin-right:10px;" onerror="this.src='https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png'">
-            <h2 style="margin:0;">TRANSPORTE MOULIN V8.7</h2>
-        </div>
-        <b id="display_guia" style="font-size:28px; color:red;">---</b>
-    </div>
+   <div style="display:flex; gap:5px;">
+    <input type="date" id="f_desde" onchange="renderHistorial()" style="width:120px;">
+    <input type="date" id="f_hasta" onchange="renderHistorial()" style="width:120px;">
+    
+    <select id="f_localidad" onchange="renderHistorial()" style="width:150px; margin-bottom:0;">
+        <option value="TODAS">-- Todas --</option>
+        <option value="RECONQUISTA">Reconquista</option>
+        <option value="ROSARIO">Rosario</option>
+        <option value="SANTA FE">Santa Fe</option>
+        <option value="BUENOS AIRES">Buenos Aires</option>
+    </select>
 
+    <button onclick="descargarExcel()" style="background:#1d6f42; color:white; border:none; padding:8px; border-radius:4px;">📊 Excel</button>
+</div>
     <div class="caja">
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
             <div><b>DESTINATARIO</b><input type="text" id="d_n" list="lista_clientes" placeholder="Nombre" oninput="completarCliente('d')"><input type="text" id="d_d" placeholder="Dirección"><input type="text" id="d_l" placeholder="Localidad"><input type="text" id="d_t" placeholder="Teléfono"><input type="text" id="d_cbu" placeholder="CBU / Alias"></div>
@@ -301,7 +321,7 @@
     </div>
 
     <div class="caja" style="background:#edf2f7; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-        <select id="pago_en" style="width:150px;"><option>PAGO EN ORIGEN</option><option>PAGO EN DESTINO</option></select>
+        <select id="pago_en" style="width:150px;"><option>PAGO EN ORIGEN</option><option selected>PAGO EN DESTINO</option></select>
         <select id="condicion" style="width:120px;"><option>CONTADO</option><option>CTA CTE</option></select>
         <div style="background:#fff700; border:2px solid #000; padding:5px; border-radius:4px; display:flex; align-items:center;">
             <b>Seg %</b> <input type="number" id="p_seg" value="0.8" step="0.1" style="width:50px; border:none; background:transparent; font-weight:bold;" oninput="calcularTotales()">
