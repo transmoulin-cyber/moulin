@@ -38,7 +38,7 @@
         window.clientesGlobal = {}; 
         window.filtroEstadoActual = 'todos';
         let proximoNumero = 1001;
-        const PRECIOS_BASE = { "Bulto": 18000, "Pallet": 180000, "Sobre": 15000, "Caja": 18000 };
+        const PRECIOS_BASE = { "Bulto": 20000, "Pallet": 200000, "Sobre": 17000, "Caja": 20000 };
 
         // --- Carga de Guías ---
         const guiasRef = ref(db, 'moulin/guias');
@@ -353,7 +353,7 @@
         tr.innerHTML = `<td><input type="number" class="i-cant" value="1" oninput="calcularTotales()"></td>
             <td><select class="i-tipo" onchange="actualizarPrecioXDefecto(this)"><option>Bulto</option><option>Pallet</option><option>Sobre</option><option>Caja</option></select></td>
             <td><input type="text" class="i-det"></td>
-            <td><input type="number" class="i-unit" value="18000" oninput="calcularTotales()"></td>
+            <td><input type="number" class="i-unit" value="20000" oninput="calcularTotales()"></td>
             <td><input type="number" class="i-decl" value="0" oninput="calcularTotales()"></td>
             <td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
         document.getElementById('cuerpoItems').appendChild(tr);
