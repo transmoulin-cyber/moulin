@@ -3,125 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MOULIN V8.7 - Sistema</title>
+    <title>SISTEMA MOULIN V8.8 - PAGO ORIGEN/DESTINO</title>
     
     <link rel="stylesheet" href="estilos-moulin.css">
     
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
-    <datalist id="lista_clientes"></datalist>
+<datalist id="lista_clientes"></datalist>
 
-    <nav class="nav-tabs no-print">
-        <button id="btn-guia" class="active" data-tab="tab-guia">📦 EMITIR GUÍA</button>
-        <button id="btn-retiros" data-tab="tab-retiros">📝 RETIROS <span id="badge-retiros" class="badge" style="display:none">0</span></button>
-        <button id="btn-clientes-tab" data-tab="tab-clientes">👥 CLIENTES <span id="badge-clientes" class="badge">0</span></button>
-    </nav>
+<!-- NAVEGACIÓN POR TABS -->
+<nav class="nav-tabs no-print">
+    <button id="btn-guia" class="active" data-tab="tab-guia">📦 EMITIR GUÍA</button>
+    <button id="btn-retiros" data-tab="tab-retiros">🚚 RETIROS <span id="badge-retiros" class="badge" style="display:none">0</span></button>
+    <button id="btn-ctacte" data-tab="tab-ctacte">💰 CUENTA CORRIENTE <span id="badge-clientes" class="badge">0</span></button>
+</nav>
 
-    <main id="tab-guia" class="tab-content active no-print">
-        <div class="hoja">
-            <header class="header-guia" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--azul); margin-bottom: 20px;">
-                <h2>MOULIN V8.7</h2>
-                <div class="info-guia"><small>N° GUÍA:</small><br><b id="display_guia" class="num-rojo">---</b></div>
-            </header>
+<!-- TAB 1: EMITIR GUÍA -->
+<main id="tab-guia" class="tab-content active no-print">
+    <div class="hoja">
+        <header class="header-guia" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--azul); margin-bottom: 20px;">
+            <h2>MOULIN V8.8</h2>
+            <div class="info-guia"><small>N° GUÍA:</small><br><b id="display_guia" class="num-rojo">---</b></div>
+        </header>
 
-            <section class="caja grid-2">
-                <div id="form-remitente">
-                    <b>REMITENTE</b>
-                    <input type="text" id="r_n" list="lista_clientes" placeholder="Nombre/Empresa">
-                    <input type="text" id="r_d" placeholder="Dirección">
-                    <input type="text" id="r_l" placeholder="Localidad">
-                    <input type="text" id="r_t" placeholder="Teléfono">
-                    <input type="text" id="r_cbu" placeholder="CBU Remitente">
-                </div>
-                <div id="form-destinatario">
-                    <b>DESTINATARIO</b>
-                    <input type="text" id="d_n" list="lista_clientes" placeholder="Nombre/Empresa">
-                    <input type="text" id="d_d" placeholder="Dirección">
-                    <input type="text" id="d_l" placeholder="Localidad">
-                    <input type="text" id="d_t" placeholder="Teléfono">
-                    <input type="text" id="d_cbu" placeholder="CBU Destinatario">
-                </div>
-            </section>
-
-           <section class="caja caja-condiciones">
-    <div class="campo-cond">
-        <label>Lugar de Pago</label>
-        <select id="pago_en">
-            <option>PAGO EN ORIGEN</option>
-            <option>PAGO EN DESTINO</option>
-        </select>
-    </div>
-
-    <div class="campo-cond">
-        <label>Condición</label>
-        <select id="condicion">
-            <option>CONTADO</option>
-            <option>CTA CTE</option>
-        </select>
-    </div>
-
-    <div class="campo-cond campo-seguro">
-        <label>Seguro %</label>
-        <input type="number" id="p_seg" value="0.8" step="0.1">
-    </div>
-
-    <div class="campo-cond campo-cr">
-        <label>C/R • Monto</label>
-        <div class="fila-cr">
-            <select id="cr_activo" onchange="document.getElementById('cr_monto').style.visibility = (this.value=='SI'?'visible':'hidden')">
-                <option value="NO">NO</option>
-                <option value="SI">SI</option>
+        <!-- FILTROS -->
+        <div style="display:flex; gap:5px; flex-wrap:wrap; margin-bottom:10px; align-items:center;">
+            <input type="date" id="f_desde" onchange="renderHistorial()" style="width:130px;" title="Desde">
+            <input type="date" id="f_hasta" onchange="renderHistorial()" style="width:130px;" title="Hasta">
+            
+            <select id="f_localidad" onchange="renderHistorial()" style="width:180px;">
+                <option value="TODAS">-- Todas las localidades --</option>
             </select>
-            <input type="number" id="cr_monto" placeholder="$" style="visibility:hidden; border: 2px solid orange; font-weight: bold;">
+
+            <button onclick="descargarExcel()" style="background:#1d6f42; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">📊 Exportar Excel</button>
+        </div>
+
+        <!-- FORMULARIO REMITENTE/DESTINATARIO -->
+        <section class="caja grid-2">
+            <div id="form-remitente">
+                <b>REMITENTE</b>
+                <input type="text" id="r_n" list="lista_clientes" placeholder="Nombre/Empresa" oninput="completarCliente('r')">
+                <input type="text" id="r_d" placeholder="Dirección">
+                <input type="text" id="r_l" placeholder="Localidad">
+                <input type="text" id="r_t" placeholder="Teléfono">
+                <input type="text" id="r_cbu" placeholder="CBU Remitente">
+            </div>
+            <div id="form-destinatario">
+                <b>DESTINATARIO</b>
+                <input type="text" id="d_n" list="lista_clientes" placeholder="Nombre/Empresa" oninput="completarCliente('d')">
+                <input type="text" id="d_d" placeholder="Dirección">
+                <input type="text" id="d_l" placeholder="Localidad">
+                <input type="text" id="d_t" placeholder="Teléfono">
+                <input type="text" id="d_cbu" placeholder="CBU Destinatario">
+            </div>
+        </section>
+
+        <!-- TABLA DE ÍTEMS -->
+        <section class="caja">
+            <table class="tabla-items">
+                <thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unitario $</th><th>V.Decl $</th><th></th></tr></thead>
+                <tbody id="cuerpoItems"></tbody>
+            </table>
+            <button id="add-item" style="margin-top:10px;">+ Agregar Bulto</button>
+        </section>
+
+        <!-- CONDICIONES DE PAGO -->
+        <section class="caja caja-condiciones">
+            <div class="campo-cond">
+                <label>Lugar de Pago</label>
+                <select id="pago_en">
+                    <option>PAGO EN ORIGEN</option>
+                    <option selected>PAGO EN DESTINO</option>
+                </select>
+            </div>
+
+            <div class="campo-cond">
+                <label>Condición</label>
+                <select id="condicion">
+                    <option>CONTADO</option>
+                    <option>CTA CTE</option>
+                </select>
+            </div>
+
+            <div class="campo-cond campo-seguro">
+                <label>Seguro %</label>
+                <input type="number" id="p_seg" value="0.8" step="0.1" oninput="calcularTotales()">
+            </div>
+
+            <div class="campo-cond campo-cr">
+                <label>C/R • Monto</label>
+                <div class="fila-cr">
+                    <select id="cr_activo" onchange="document.getElementById('cr_monto').style.visibility = (this.value=='SI'?'visible':'hidden')">
+                        <option value="NO">NO</option>
+                        <option value="SI">SI</option>
+                    </select>
+                    <input type="number" id="cr_monto" placeholder="$" style="visibility:hidden; border: 2px solid orange; font-weight: bold;">
+                </div>
+            </div>
+        </section>
+
+        <!-- HISTORIAL -->
+        <section class="historial-container">
+            <h4 style="margin-top: 20px; border-bottom: 1px solid #ccc;">HISTORIAL RECIENTE</h4>
+            <div style="display:flex; gap:5px; margin-bottom:10px;">
+                <button class="btn-f active" onclick="cambiarFiltroEstado('todos', this)">Todos</button>
+                <button class="btn-f" onclick="cambiarFiltroEstado('recibido', this)">Recibidos</button>
+                <button class="btn-f" onclick="cambiarFiltroEstado('deposito', this)">Depósito</button>
+                <button class="btn-f" onclick="cambiarFiltroEstado('entregado', this)">Entregados</button>
+            </div>
+            <input type="text" id="busq" placeholder="🔍 Buscar..." oninput="renderHistorial()" style="width:100%; padding:8px; border:2px solid var(--azul); margin-bottom:10px;">
+            <table class="tabla-items">
+                <thead><tr style="background:#eee;"><th>Guía</th><th>Fecha</th><th>Ruta</th><th>Total</th><th>Estado</th><th></th></tr></thead>
+                <tbody id="listaHistorial"></tbody>
+            </table>
+        </section>
+    </div>
+</main>
+
+<!-- TAB 2: RETIROS -->
+<main id="tab-retiros" class="tab-content no-print">
+    <div class="hoja">
+        <h3 style="color:var(--azul); border-bottom:2px solid var(--azul); padding-bottom:10px;">🚚 GESTIÓN DE RETIROS</h3>
+        <div id="listaRetiros" style="margin-top:20px;"></div>
+    </div>
+</main>
+
+<!-- TAB 3: CUENTA CORRIENTE -->
+<main id="tab-ctacte" class="tab-content no-print">
+    <div class="hoja">
+        <h3 style="color:var(--azul); border-bottom:2px solid var(--azul); padding-bottom:10px;">💰 CUENTA CORRIENTE DE CLIENTES</h3>
+        <div style="overflow-x: auto; margin-top:20px;">
+            <table class="tabla-items">
+                <thead>
+                    <tr><th>Cliente</th><th>Localidad</th><th>Guías</th><th>Total Adeudado</th><th>Acción</th></tr>
+                </thead>
+                <tbody id="cuerpoTablaClientes"></tbody>
+            </table>
         </div>
     </div>
-</section>
+</main>
 
+<!-- FOOTER FIJO -->
+<footer class="footer-fijo no-print">
+    <div id="total_txt" style="font-size: 24px; color: #48bb78;">TOTAL: $ 0.00</div>
+    <button id="btn-emitir" class="btn-emitir">GRABAR E IMPRIMIR</button>
+</footer>
 
-            <section class="historial-container">
-                <h4 style="margin-top: 20px; border-bottom: 1px solid #ccc;">HISTORIAL RECIENTE</h4>
-                <table class="tabla-items">
-                    <thead><tr><th>Guía</th><th>Fecha</th><th>Destino</th><th>Estado</th><th></th></tr></thead>
-                    <tbody id="listaHistorial"></tbody>
-                </table>
-            </section>
-        </div>
-    </main>
+<!-- SECCIÓN DE IMPRESIÓN -->
+<div id="seccion-impresion"></div>
 
-    <main id="tab-retiros" class="tab-content no-print">
-        <div class="hoja">
-            <h3>SOLICITUD DE RETIRO</h3>
-            <div id="listaRetiros"></div>
-        </div>
-    </main>
-
-    <main id="tab-clientes" class="tab-content no-print">
-        <div class="hoja">
-            <h3>BASE DE CLIENTES</h3>
-            <div style="overflow-x: auto;">
-                <table class="tabla-items">
-                    <thead>
-                        <tr><th>Nombre</th><th>Dirección</th><th>Localidad</th><th>Estado Cta</th><th>Acción</th></tr>
-                    </thead>
-                    <tbody id="cuerpoTablaClientes"></tbody>
-                </table>
-            </div>
-        </div>
-    </main>
-
-    <footer class="footer-fijo no-print">
-        <div id="total_txt" style="font-size: 24px; color: #f6ad55;">TOTAL: $ 0.00</div>
-        <button id="btn-emitir" class="btn-emitir">GRABAR E IMPRIMIR</button>
-    </footer>
-
-    <script type="module" src="app-main.js"></script>
+<script type="module" src="app-main.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
