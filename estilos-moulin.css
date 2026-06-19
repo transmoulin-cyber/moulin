@@ -75,7 +75,7 @@ body {
     border-radius: 6px;
 }
 
-/* --- FORMULARIOS Y GRID --- */
+/* --- FORMULARIOS --- */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
 
 input, select, textarea {
@@ -88,7 +88,30 @@ input, select, textarea {
     box-sizing: border-box;
 }
 
+textarea { width: 98%; }
+
+.label-form {
+    display: block;
+    font-size: 11px;
+    color: var(--azul);
+    font-weight: bold;
+    margin-top: 6px;
+    margin-bottom: 2px;
+}
+
 .num-rojo { font-size: 28px; color: var(--rojo); }
+
+/* --- AVISO RETIRO ASOCIADO --- */
+.aviso-retiro {
+    background: #fff3cd;
+    border: 2px solid var(--naranja);
+    border-radius: 6px;
+    padding: 10px 15px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+}
 
 /* --- CONDICIONES DE PAGO --- */
 .caja-condiciones {
@@ -131,13 +154,8 @@ input, select, textarea {
     align-items: center;
 }
 
-.caja-condiciones .fila-cr select {
-    width: 70px;
-}
-
-.caja-condiciones .fila-cr input {
-    flex: 1;
-}
+.caja-condiciones .fila-cr select { width: 70px; }
+.caja-condiciones .fila-cr input { flex: 1; }
 
 /* --- BOTONES DE FILTRO --- */
 .btn-f {
@@ -156,44 +174,70 @@ input, select, textarea {
 }
 
 /* --- TABLAS --- */
-.tabla-items {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 11px;
-}
-
-.tabla-items th {
-    background: var(--azul);
-    color: white;
-    padding: 5px;
-}
-
-.tabla-items td {
-    padding: 6px;
-    border-bottom: 1px solid #eee;
-}
+.tabla-items { width: 100%; border-collapse: collapse; font-size: 11px; }
+.tabla-items th { background: var(--azul); color: white; padding: 5px; }
+.tabla-items td { padding: 6px; border-bottom: 1px solid #eee; }
 
 /* --- RETIROS (TARJETAS) --- */
+.btn-nuevo-retiro {
+    background: var(--naranja);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.btn-nuevo-retiro:hover { background: #e89a3e; }
+
 .card-retiro {
     background: white;
     border-left: 6px solid var(--naranja);
-    padding: 15px;
-    margin-bottom: 10px;
+    padding: 12px 15px;
+    margin-bottom: 8px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-radius: 4px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
-.card-retiro button {
-    background: var(--verde);
-    color: white;
+.card-retiro.realizado {
+    border-left-color: var(--verde);
+    opacity: 0.8;
+}
+
+.card-retiro.cancelado {
+    border-left-color: #ccc;
+    opacity: 0.5;
+    text-decoration: line-through;
+}
+
+.retiro-info { flex: 1; min-width: 200px; }
+.retiro-info .retiro-num { font-weight: bold; color: var(--azul); font-size: 13px; }
+.retiro-info .retiro-cliente { font-weight: bold; font-size: 14px; }
+.retiro-info .retiro-datos { font-size: 12px; color: #666; }
+.retiro-info .retiro-meta { font-size: 11px; color: #999; margin-top: 3px; }
+
+.retiro-acciones { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.retiro-acciones button {
     border: none;
-    padding: 10px 15px;
+    padding: 8px 14px;
     border-radius: 5px;
     cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
 }
+
+.btn-guia { background: var(--verde); }
+.btn-cancelar { background: var(--rojo); }
+.btn-ver { background: var(--azul); }
 
 /* --- FOOTER TOTALES --- */
 .footer-fijo {
@@ -251,48 +295,12 @@ input, select, textarea {
         justify-content: space-between;
         page-break-after: always;
         font-size: 13px;
-        position: relative;
     }
     
-    .resaltado {
-        background: #eee !important;
-        font-weight: bold;
-        padding: 0 4px;
-        border: 1px solid #ccc;
-    }
-    
-    .tabla-items-print {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12px;
-        margin: 5px 0;
-    }
-    
-    .tabla-items-print th,
-    .tabla-items-print td {
-        border: 1px solid #000;
-        padding: 4px;
-    }
-    
-    .logo-print {
-        height: 45px;
-        width: auto;
-        vertical-align: middle;
-    }
-    
-    .header-print {
-        display: flex;
-        align-items: center;
-        border-bottom: 2px solid #000;
-        padding-bottom: 5px;
-    }
-    
-    .bultos-box {
-        border: 2px solid #000;
-        padding: 2px 8px;
-        font-weight: bold;
-        font-size: 15px;
-        margin-top: 5px;
-        display: inline-block;
-    }
+    .resaltado { background: #eee !important; font-weight: bold; padding: 0 4px; border: 1px solid #ccc; }
+    .tabla-items-print { width: 100%; border-collapse: collapse; font-size: 12px; margin: 5px 0; }
+    .tabla-items-print th, .tabla-items-print td { border: 1px solid #000; padding: 4px; }
+    .logo-print { height: 45px; width: auto; vertical-align: middle; }
+    .header-print { display: flex; align-items: center; border-bottom: 2px solid #000; padding-bottom: 5px; }
+    .bultos-box { border: 2px solid #000; padding: 2px 8px; font-weight: bold; font-size: 15px; margin-top: 5px; display: inline-block; }
 }
