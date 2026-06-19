@@ -23,13 +23,15 @@ const db = getDatabase(app);
 const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
 if (!sesion) {
     alert("No hay sesión activa");
-    window.location.href = "test-retiros.html";
+    // Usa el nombre del archivo actual para redirigir
+    window.location.href = window.location.pathname.split('/').pop();
 }
 
 const PREFIJO_BASE = (sesion.prefijo || "RECON").toUpperCase();
 const PREFIJO = (["TODO", "ADM", "REC"].includes(PREFIJO_BASE)) ? "RECON" : PREFIJO_BASE;
 const NOMBRE_OP = sesion.nombre || "Operador";
 const ES_ADMIN = ["TODO", "ADM"].includes(PREFIJO_BASE);
+const NOMBRE_SUCURSAL = PREFIJO_BASE; // Nombre de la sucursal actual
 
 const PRECIOS_BASE = { "Bulto": 20000, "Pallet": 200000, "Sobre": 17000, "Caja": 20000 };
 
@@ -42,10 +44,25 @@ window.retirosGlobal = [];
 window.filtroEstadoActual = 'todos';
 window.datosParaExcel = [];
 let proximoNumero = 1001;
+let proximoRetiro = 1;
+let retiroAsociadoActual = null; // Guarda el retiro que se está convirtiendo en guía
+
+// ============================================
+// TABS
+// ============================================
+document.querySelectorAll('.nav-tabs button').forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll('.nav-tabs button, .tab-content').forEach(el => el.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.getAttribute('data-tab')).classList.add('active');
+    };
+});
 
 // ============================================
 // LISTENERS FIREBASE
 // ============================================
+
+// --- GUÍAS ---
 onValue(ref(db, 'moulin/guias'), (snapshot) => {
     try {
         const data = snapshot.val();
@@ -70,14 +87,15 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
         window.actualizarFiltroLocalidades();
         window.renderHistorial();
     } catch (e) {
-        console.error("Error en listener:", e);
+        console.error("Error en listener guías:", e);
     }
 });
 
+// --- CLIENTES ---
 onValue(ref(db, 'moulin/clientes'), (snapshot) => {
     const data = snapshot.val();
     window.clientesGlobal = data ? Object.values(data) : [];
-    
+
     const listaDL = document.getElementById('lista_clientes');
     if (listaDL) {
         listaDL.innerHTML = window.clientesGlobal
@@ -85,60 +103,61 @@ onValue(ref(db, 'moulin/clientes'), (snapshot) => {
             .map(c => `<option value="${c.nombre || c.n}">`)
             .join('');
     }
-    
+
     const badge = document.getElementById('badge-clientes');
     if (badge) badge.innerText = window.clientesGlobal.length;
-    
+
     renderTablaClientes();
 });
 
+// --- RETIROS ---
 onValue(ref(db, 'moulin/retiros'), (snapshot) => {
     const data = snapshot.val();
-    window.retirosGlobal = data ? Object.entries(data).map(([id, val]) => ({...val, id})).reverse() : [];
-    
+    window.retirosGlobal = data
+        ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })).reverse()
+        : [];
+
+    // Calcular próximo número de retiro
+    const numsRetiro = window.retirosGlobal
+        .map(r => {
+            if (!r.num_retiro) return 0;
+            const partes = r.num_retiro.split('-');
+            return partes.length >= 3 ? parseInt(partes[2]) || 0 : 0;
+        })
+        .filter(n => !isNaN(n));
+    proximoRetiro = numsRetiro.length > 0 ? Math.max(...numsRetiro) + 1 : 1;
+
+    // Badge de pendientes visibles para esta sucursal
+    const pendientesVisibles = window.retirosGlobal.filter(r =>
+        r.estado === 'pendiente' && puedeVerRetiro(r)
+    );
     const badge = document.getElementById('badge-retiros');
     if (badge) {
-        const pendientes = window.retirosGlobal.filter(r => r.estado !== "Realizado").length;
-        badge.innerText = pendientes;
-        badge.style.display = pendientes > 0 ? "inline-block" : "none";
+        badge.innerText = pendientesVisibles.length;
+        badge.style.display = pendientesVisibles.length > 0 ? "inline-block" : "none";
     }
-    
+
     renderRetiros();
 });
 
 // ============================================
-// FILTRO DINÁMICO DE LOCALIDADES
+// PERMISOS DE VISIBILIDAD DE RETIROS
 // ============================================
-window.actualizarFiltroLocalidades = function() {
-    const localidades = new Set();
-    window.historialGlobal.forEach(g => {
-        if (g.d_l && typeof g.d_l === 'string') localidades.add(g.d_l.trim().toUpperCase());
-        if (g.r_l && typeof g.r_l === 'string') localidades.add(g.r_l.trim().toUpperCase());
-    });
-
-    const select = document.getElementById('f_localidad');
-    const valorActual = select.value;
-    const sorted = Array.from(localidades).sort();
-    
-    select.innerHTML = '<option value="TODAS">-- Todas las localidades --</option>' +
-        sorted.map(l => `<option value="${l}">${l}</option>`).join('');
-    
-    if (sorted.includes(valorActual)) {
-        select.value = valorActual;
-    } else {
-        select.value = "TODAS";
-    }
-};
+function puedeVerRetiro(r) {
+    if (ES_ADMIN) return true;
+    const localidad = (r.localidad || '').toUpperCase();
+    const pedidoPor = (r.pedido_por || '').toUpperCase();
+    return localidad === NOMBRE_SUCURSAL || pedidoPor === NOMBRE_SUCURSAL;
+}
 
 // ============================================
 // AUTOCOMPLETADO DE CLIENTES
 // ============================================
 window.completarCliente = (tipo) => {
     const n = document.getElementById(`${tipo}_n`).value.trim();
-    const cliente = window.clientesGlobal.find(c => 
+    const cliente = window.clientesGlobal.find(c =>
         (c.nombre || c.n || '').toLowerCase() === n.toLowerCase()
     );
-    
     if (cliente) {
         document.getElementById(`${tipo}_d`).value = cliente.direccion || cliente.d || '';
         document.getElementById(`${tipo}_l`).value = cliente.localidad || cliente.l || '';
@@ -148,16 +167,21 @@ window.completarCliente = (tipo) => {
 };
 
 // ============================================
-// TABS
+// FILTRO DINÁMICO DE LOCALIDADES
 // ============================================
-document.querySelectorAll('.nav-tabs button').forEach(btn => {
-    btn.onclick = () => {
-        document.querySelectorAll('.nav-tabs button, .tab-content').forEach(el => el.classList.remove('active'));
-        btn.classList.add('active');
-        const targetId = btn.getAttribute('data-tab');
-        document.getElementById(targetId).classList.add('active');
-    };
-});
+window.actualizarFiltroLocalidades = function () {
+    const localidades = new Set();
+    window.historialGlobal.forEach(g => {
+        if (g.d_l) localidades.add(g.d_l.trim().toUpperCase());
+        if (g.r_l) localidades.add(g.r_l.trim().toUpperCase());
+    });
+    const select = document.getElementById('f_localidad');
+    const valorActual = select.value;
+    const sorted = Array.from(localidades).sort();
+    select.innerHTML = '<option value="TODAS">-- Todas las localidades --</option>' +
+        sorted.map(l => `<option value="${l}">${l}</option>`).join('');
+    if (sorted.includes(valorActual)) select.value = valorActual;
+};
 
 // ============================================
 // TABLA DE ÍTEMS
@@ -165,7 +189,6 @@ document.querySelectorAll('.nav-tabs button').forEach(btn => {
 window.agregarFila = () => {
     const cuerpoItems = document.getElementById('cuerpoItems');
     if (!cuerpoItems) return;
-    
     const tr = document.createElement('tr');
     tr.innerHTML = `
         <td><input type="number" class="i-cant" value="1" min="1" oninput="calcularTotales()"></td>
@@ -175,39 +198,31 @@ window.agregarFila = () => {
         <td><input type="text" class="i-det" placeholder="Detalle"></td>
         <td><input type="number" class="i-unit" value="20000" min="0" oninput="calcularTotales()"></td>
         <td><input type="number" class="i-decl" value="0" min="0" oninput="calcularTotales()"></td>
-        <td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>
-    `;
-    
+        <td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
     cuerpoItems.appendChild(tr);
     calcularTotales();
 };
 
 window.actualizarPrecioXDefecto = (inputTipo) => {
-    const tr = inputTipo.closest('tr');
-    tr.querySelector('.i-unit').value = PRECIOS_BASE[inputTipo.value] || 0;
+    inputTipo.closest('tr').querySelector('.i-unit').value = PRECIOS_BASE[inputTipo.value] || 0;
     calcularTotales();
 };
 
-window.calcularTotales = function() {
+window.calcularTotales = function () {
     let flete = 0, vdecl = 0, cant_t = 0;
     document.querySelectorAll('#cuerpoItems tr').forEach(r => {
         const c = parseFloat(r.querySelector('.i-cant').value) || 0;
-        const u = parseFloat(r.querySelector('.i-unit').value) || 0;
-        const d = parseFloat(r.querySelector('.i-decl').value) || 0;
-        flete += c * u;
-        vdecl += d;
+        flete += c * (parseFloat(r.querySelector('.i-unit').value) || 0);
+        vdecl += parseFloat(r.querySelector('.i-decl').value) || 0;
         cant_t += c;
     });
-    
     const pSeg = parseFloat(document.getElementById('p_seg')?.value || 0.8);
     const seg = vdecl * (pSeg / 100);
     const total = flete + seg;
-    
     const txt = document.getElementById('total_txt');
     if (txt) {
         txt.innerHTML = `<small style="font-size:12px; color:#ccc;">Bultos: ${cant_t} | Flete: $${flete.toLocaleString('es-AR')} | Seg: $${seg.toFixed(2)}</small><br>TOTAL: $ ${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
     }
-    
     return { flete, seg, total, v_decl: vdecl, cant_t };
 };
 
@@ -219,17 +234,10 @@ if (btnEmitir) {
     btnEmitir.onclick = async () => {
         const r_n = document.getElementById('r_n').value.trim();
         const d_n = document.getElementById('d_n').value.trim();
-        
-        if (!r_n || !d_n) {
-            alert("⚠️ Faltan datos de clientes (Remitente y Destinatario).");
-            return;
-        }
+        if (!r_n || !d_n) return alert("⚠️ Faltan datos de clientes.");
 
         const tot = calcularTotales();
-        if (tot.cant_t === 0) {
-            alert("⚠️ Debes agregar al menos un bulto.");
-            return;
-        }
+        if (tot.cant_t === 0) return alert("⚠️ Debes agregar al menos un bulto.");
 
         const idU = Date.now();
         const nroGuia = `${PREFIJO}-${String(proximoNumero).padStart(5, '0')}`;
@@ -238,21 +246,12 @@ if (btnEmitir) {
             num: nroGuia,
             fecha: new Date().toLocaleDateString('es-AR'),
             timestamp: Date.now(),
-            r_n,
-            r_d: document.getElementById('r_d').value,
-            r_l: document.getElementById('r_l').value,
-            r_t: document.getElementById('r_t').value,
-            r_cbu: document.getElementById('r_cbu').value,
-            d_n,
-            d_d: document.getElementById('d_d').value,
-            d_l: document.getElementById('d_l').value,
-            d_t: document.getElementById('d_t').value,
-            d_cbu: document.getElementById('d_cbu').value,
-            flete: tot.flete.toFixed(2),
-            seg: tot.seg.toFixed(2),
-            total: tot.total.toFixed(2),
-            v_decl: tot.v_decl.toFixed(2),
-            cant_t: tot.cant_t,
+            r_n, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value,
+            r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value,
+            d_n, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value,
+            d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value,
+            flete: tot.flete.toFixed(2), seg: tot.seg.toFixed(2), total: tot.total.toFixed(2),
+            v_decl: tot.v_decl.toFixed(2), cant_t: tot.cant_t,
             pago_en: document.getElementById('pago_en').value,
             condicion: document.getElementById('condicion').value,
             cr_activo: document.getElementById('cr_activo').value,
@@ -260,17 +259,30 @@ if (btnEmitir) {
             p_seg_aplicado: document.getElementById('p_seg').value,
             estado: 'recibido',
             emisor: NOMBRE_OP,
+            retiro_asociado: retiroAsociadoActual || '',
             items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(tr => ({
-                c: tr.querySelector('.i-cant').value,
-                t: tr.querySelector('.i-tipo').value,
-                d: tr.querySelector('.i-det').value,
-                u: tr.querySelector('.i-unit').value,
+                c: tr.querySelector('.i-cant').value, t: tr.querySelector('.i-tipo').value,
+                d: tr.querySelector('.i-det').value, u: tr.querySelector('.i-unit').value,
                 vd: tr.querySelector('.i-decl').value
             }))
         };
 
         try {
             await set(ref(db, `moulin/guias/${idU}`), guia);
+
+            // Si viene de un retiro, marcarlo como realizado
+            if (retiroAsociadoActual) {
+                const retiro = window.retirosGlobal.find(r => r.num_retiro === retiroAsociadoActual);
+                if (retiro) {
+                    await update(ref(db, `moulin/retiros/${retiro.firebaseID}`), {
+                        estado: 'realizado',
+                        realizadoPor: NOMBRE_OP,
+                        fechaRealizado: new Date().toLocaleDateString('es-AR'),
+                        guiaAsociada: nroGuia
+                    });
+                }
+            }
+
             imprimir(guia);
             limpiarFormulario();
             proximoNumero++;
@@ -280,12 +292,14 @@ if (btnEmitir) {
     };
 }
 
-window.limpiarFormulario = function() {
+window.limpiarFormulario = function () {
     ['r_n', 'r_t', 'r_d', 'r_l', 'r_cbu', 'd_n', 'd_t', 'd_d', 'd_l', 'd_cbu', 'cr_monto'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
     document.getElementById('cuerpoItems').innerHTML = '';
+    retiroAsociadoActual = null;
+    document.getElementById('aviso-retiro').style.display = 'none';
     agregarFila();
 };
 
@@ -294,17 +308,13 @@ window.limpiarFormulario = function() {
 // ============================================
 function imprimir(g) {
     const itemsH = (g.items || []).map(i => `
-        <tr>
-            <td align="center">${i.c}</td>
-            <td>${i.t}</td>
-            <td>${i.d || ''}</td>
-            <td align="right">$${i.u}</td>
-            <td align="right">$${i.vd}</td>
-        </tr>`).join('');
+        <tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d || ''}</td>
+        <td align="right">$${i.u}</td><td align="right">$${i.vd}</td></tr>`).join('');
 
     let html = "";
     const logoPath = "logo.png";
     const fallbackLogo = "https://raw.githubusercontent.com/fcanteros77/fcanteros77.github.io/main/logo.png";
+    const lineaRetiro = g.retiro_asociado ? `<div style="background:#fff3cd; padding:4px 8px; text-align:center; font-size:12px; border:1px solid #ccc;">🚚 Retiro asociado: <b>${g.retiro_asociado}</b></div>` : '';
 
     ['ORIGINAL TRANSPORTE', 'DUPLICADO CLIENTE'].forEach((tit) => {
         html += `
@@ -318,17 +328,16 @@ function imprimir(g) {
                         <b>${g.fecha}</b>
                     </div>
                 </div>
+                ${lineaRetiro}
                 <div style="display:grid; grid-template-columns:1fr 1fr; border:1px solid #000; margin:8px 0; padding:8px; line-height:1.4;">
                     <div style="border-right:1px solid #000; padding-right:8px;">
                         <b style="font-size:14px;">REMITENTE:</b> ${g.r_n}<br>
-                        Dir: ${g.r_d}<br>
-                        Tel: ${g.r_t} | CBU: ${g.r_cbu}<br>
+                        Dir: ${g.r_d}<br>Tel: ${g.r_t} | CBU: ${g.r_cbu}<br>
                         Loc: <span class="resaltado">${g.r_l}</span>
                     </div>
                     <div style="padding-left:8px;">
                         <b style="font-size:14px;">DESTINATARIO:</b> ${g.d_n}<br>
-                        Dir: ${g.d_d}<br>
-                        Tel: ${g.d_t} | CBU: ${g.d_cbu}<br>
+                        Dir: ${g.d_d}<br>Tel: ${g.d_t} | CBU: ${g.d_cbu}<br>
                         Loc: <span class="resaltado">${g.d_l}</span>
                     </div>
                 </div>
@@ -343,43 +352,37 @@ function imprimir(g) {
                 <div style="margin-top:auto; text-align:right;">
                     <div style="border-top:1px solid #000; width:200px; text-align:center; margin-left:auto; font-size:11px;">Firma y Aclaración Receptor</div>
                 </div>
-            </div>
-        `;
+            </div>`;
     });
 
     html += `
         <div class="etiqueta">
             <div style="width:33%; line-height:1.1;">
-                <small>DESTINO:</small><br>
-                <b style="font-size:15px;">${g.d_n}</b><br>
-                <span style="font-size:12px;">${g.d_d}</span><br>
-                <b class="resaltado" style="font-size:15px;">${g.d_l}</b>
+                <small>DESTINO:</small><br><b style="font-size:15px;">${g.d_n}</b><br>
+                <span style="font-size:12px;">${g.d_d}</span><br><b class="resaltado" style="font-size:15px;">${g.d_l}</b>
             </div>
             <div style="width:33%; display:flex; flex-direction:column; align-items:center;">
                 <div id="qr_etiqueta" style="width:70px; height:70px;"></div>
                 <b style="font-size:14px; margin-top:3px;">${g.num}</b>
+                ${g.retiro_asociado ? `<small>${g.retiro_asociado}</small>` : ''}
             </div>
             <div style="width:33%; text-align:right; line-height:1.1;">
-                <small>ORIGEN:</small><br>
-                <b style="font-size:13px;">${g.r_n}</b><br>
+                <small>ORIGEN:</small><br><b style="font-size:13px;">${g.r_n}</b><br>
                 <b class="resaltado">${g.r_l}</b><br>
                 <div class="bultos-box">BULTOS: ${g.cant_t}</div>
             </div>
-        </div>
-    `;
+        </div>`;
 
     document.getElementById('seccion-impresion').innerHTML = html;
     setTimeout(() => {
         const qrEl = document.getElementById("qr_etiqueta");
-        if (qrEl && typeof QRCode !== 'undefined') {
-            new QRCode(qrEl, { text: g.num, width: 70, height: 70 });
-        }
+        if (qrEl && typeof QRCode !== 'undefined') new QRCode(qrEl, { text: g.num, width: 70, height: 70 });
         window.print();
     }, 300);
 }
 
 // ============================================
-// FILTROS Y RENDERIZADO
+// HISTORIAL DE GUÍAS
 // ============================================
 window.cambiarFiltroEstado = (est, btn) => {
     window.filtroEstadoActual = est;
@@ -395,15 +398,9 @@ window.renderHistorial = () => {
     const locElegida = document.getElementById('f_localidad')?.value || "TODAS";
 
     const filtrados = window.historialGlobal.filter(g => {
-        const sucPermitida = ES_ADMIN ||
-            (PREFIJO === "RECON" ? (g.num?.startsWith("RECON") || g.num?.startsWith("REC")) : g.num?.startsWith(PREFIJO));
-
+        const sucPermitida = ES_ADMIN || (PREFIJO === "RECON" ? (g.num?.startsWith("RECON") || g.num?.startsWith("REC")) : g.num?.startsWith(PREFIJO));
         const est = (window.filtroEstadoActual === 'todos' || g.estado === window.filtroEstadoActual);
-
-        const cumpleLocalidad = (locElegida === "TODAS") ||
-            (g.d_l && g.d_l.toUpperCase().includes(locElegida)) ||
-            (g.r_l && g.r_l.toUpperCase().includes(locElegida));
-
+        const cumpleLocalidad = (locElegida === "TODAS") || (g.d_l && g.d_l.toUpperCase().includes(locElegida)) || (g.r_l && g.r_l.toUpperCase().includes(locElegida));
         let fec = true;
         if (fDesde || fHasta) {
             const p = (g.fecha || '').split('/');
@@ -413,11 +410,7 @@ window.renderHistorial = () => {
                 if (fHasta && fGuia > fHasta) fec = false;
             }
         }
-
-        const b = (g.num || '').toLowerCase().includes(busq) ||
-            (g.r_n || '').toLowerCase().includes(busq) ||
-            (g.d_n || '').toLowerCase().includes(busq);
-
+        const b = (g.num || '').toLowerCase().includes(busq) || (g.r_n || '').toLowerCase().includes(busq) || (g.d_n || '').toLowerCase().includes(busq) || (g.retiro_asociado || '').toLowerCase().includes(busq);
         return sucPermitida && est && cumpleLocalidad && fec && b;
     });
 
@@ -426,6 +419,7 @@ window.renderHistorial = () => {
     document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map(g => `
         <tr>
             <td><b>${g.num || ''}</b></td>
+            <td><small>${g.retiro_asociado || '-'}</small></td>
             <td>${g.fecha || ''}</td>
             <td>${g.r_n || ''} > ${g.d_n || ''}</td>
             <td>$${Number(g.total || 0).toLocaleString('es-AR')}</td>
@@ -437,130 +431,238 @@ window.renderHistorial = () => {
                 </select>
             </td>
             <td><button onclick="reimprimir('${g.num}')" title="Reimprimir">🖨️</button></td>
-        </tr>
-    `).join('');
+        </tr>`).join('');
 };
 
 window.actualizarEstadoNube = (id, est) => {
-    update(ref(db, `moulin/guias/${id}`), { estado: est })
-        .catch(err => alert("Error al actualizar: " + err.message));
+    update(ref(db, `moulin/guias/${id}`), { estado: est }).catch(err => alert("Error: " + err.message));
 };
 
 window.reimprimir = (num) => {
     const g = window.historialGlobal.find(x => x.num === num);
-    if (g) imprimir(g);
-    else alert("Guía no encontrada.");
+    if (g) imprimir(g); else alert("Guía no encontrada.");
 };
 
 // ============================================
-// EXPORTAR EXCEL
+// EXCEL GUÍAS
 // ============================================
 window.descargarExcel = () => {
-    if (!window.datosParaExcel.length) {
-        alert("No hay datos para exportar con los filtros actuales.");
-        return;
-    }
-
+    if (!window.datosParaExcel.length) return alert("No hay datos para exportar.");
     const resumen = window.datosParaExcel.map(g => ({
-        'N° Guía': g.num,
-        'Fecha': g.fecha,
-        'Remitente': g.r_n,
-        'Tel. Remitente': g.r_t,
-        'Dirección Origen': g.r_d,
-        'Localidad Origen': g.r_l,
-        'Destinatario': g.d_n,
-        'Tel. Destinatario': g.d_t,
-        'Dirección Destino': g.d_d,
-        'Localidad Destino': g.d_l,
-        'Ruta': `${g.r_l || ''} → ${g.d_l || ''}`,
-        'Cant. Bultos': g.cant_t,
-        'Flete': Number(g.flete || 0),
-        'Seguro': Number(g.seg || 0),
-        'Valor Declarado': Number(g.v_decl || 0),
-        'TOTAL': Number(g.total || 0),
-        'Pago en': g.pago_en,
-        'Condición': g.condicion,
-        'Crédito': g.cr_activo === 'SI' ? `SI ($${g.cr_monto || 0})` : 'NO',
-        'Estado': g.estado ? g.estado.toUpperCase() : '',
-        'Operador': g.emisor || ''
+        'N° Guía': g.num, 'Retiro Asociado': g.retiro_asociado || '', 'Fecha': g.fecha,
+        'Remitente': g.r_n, 'Tel. Remitente': g.r_t, 'Dirección Origen': g.r_d, 'Localidad Origen': g.r_l,
+        'Destinatario': g.d_n, 'Tel. Destinatario': g.d_t, 'Dirección Destino': g.d_d, 'Localidad Destino': g.d_l,
+        'Cant. Bultos': g.cant_t, 'Flete': Number(g.flete || 0), 'Seguro': Number(g.seg || 0),
+        'TOTAL': Number(g.total || 0), 'Pago en': g.pago_en, 'Condición': g.condicion,
+        'Estado': g.estado?.toUpperCase() || '', 'Operador': g.emisor || ''
     }));
-
-    const detalle = [];
-    window.datosParaExcel.forEach(g => {
-        (g.items || []).forEach(item => {
-            detalle.push({
-                'N° Guía': g.num,
-                'Fecha': g.fecha,
-                'Destinatario': g.d_n,
-                'Localidad Destino': g.d_l,
-                'Cantidad': item.c,
-                'Tipo': item.t,
-                'Detalle': item.d,
-                'Unitario': Number(item.u || 0),
-                'Valor Declarado': Number(item.vd || 0)
-            });
-        });
-    });
-
     const wb = XLSX.utils.book_new();
-    
-    const ws1 = XLSX.utils.json_to_sheet(resumen);
-    ws1['!cols'] = [
-        {wch: 15}, {wch: 12}, {wch: 25}, {wch: 15}, {wch: 30}, {wch: 20},
-        {wch: 25}, {wch: 15}, {wch: 30}, {wch: 20}, {wch: 30}, {wch: 10},
-        {wch: 12}, {wch: 12}, {wch: 15}, {wch: 12}, {wch: 18}, {wch: 12},
-        {wch: 15}, {wch: 12}, {wch: 15}
-    ];
-    XLSX.utils.book_append_sheet(wb, ws1, "Resumen");
-
-    if (detalle.length > 0) {
-        const ws2 = XLSX.utils.json_to_sheet(detalle);
-        ws2['!cols'] = [
-            {wch: 15}, {wch: 12}, {wch: 25}, {wch: 20},
-            {wch: 10}, {wch: 12}, {wch: 30}, {wch: 12}, {wch: 15}
-        ];
-        XLSX.utils.book_append_sheet(wb, ws2, "Detalle Bultos");
-    }
-
-    const fecha = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `Moulin_Reporte_${fecha}.xlsx`);
+    const ws = XLSX.utils.json_to_sheet(resumen);
+    ws['!cols'] = [{wch:15},{wch:15},{wch:12},{wch:25},{wch:15},{wch:30},{wch:20},{wch:25},{wch:15},{wch:30},{wch:20},{wch:10},{wch:12},{wch:12},{wch:12},{wch:18},{wch:12},{wch:12},{wch:15}];
+    XLSX.utils.book_append_sheet(wb, ws, "Guías");
+    XLSX.writeFile(wb, `Moulin_Guias_${new Date().toISOString().split('T')[0]}.xlsx`);
 };
 
 // ============================================
-// RETIROS
+// RETIROS - FORMULARIO
+// ============================================
+window.toggleFormRetiro = function () {
+    const form = document.getElementById('form-retiro-container');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'none') {
+        ['ret_cliente', 'ret_direccion', 'ret_telefono', 'ret_localidad', 'ret_pedido_por', 'ret_observaciones'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        document.getElementById('ret_bultos').value = '1';
+    }
+};
+
+window.guardarRetiro = async function () {
+    const cliente = document.getElementById('ret_cliente').value.trim();
+    const localidad = document.getElementById('ret_localidad').value.trim().toUpperCase();
+    const pedidoPor = document.getElementById('ret_pedido_por').value.trim().toUpperCase();
+
+    if (!cliente) return alert("⚠️ Ingresá el nombre del local/persona.");
+    if (!localidad) return alert("⚠️ Ingresá la localidad donde se retira.");
+
+    // Abreviatura de la localidad para el número
+    const abrev = localidad.substring(0, 3);
+    const numRetiro = `RT-${abrev}-${String(proximoRetiro).padStart(5, '0')}`;
+
+    const retiro = {
+        num_retiro: numRetiro,
+        cliente: cliente,
+        direccion: document.getElementById('ret_direccion').value.trim(),
+        telefono: document.getElementById('ret_telefono').value.trim(),
+        localidad: localidad,
+        pedido_por: pedidoPor,
+        bultos: parseInt(document.getElementById('ret_bultos').value) || 1,
+        observaciones: document.getElementById('ret_observaciones').value.trim(),
+        estado: 'pendiente',
+        creadoPor: NOMBRE_OP,
+        sucursalCreadora: NOMBRE_SUCURSAL,
+        fechaCreacion: new Date().toLocaleDateString('es-AR'),
+        timestamp: Date.now()
+    };
+
+    try {
+        await set(ref(db, `moulin/retiros/${Date.now()}`), retiro);
+        toggleFormRetiro();
+        proximoRetiro++;
+    } catch (e) {
+        alert("❌ Error al guardar retiro: " + e.message);
+    }
+};
+
+// ============================================
+// RETIROS - RENDERIZADO
 // ============================================
 function renderRetiros() {
     const div = document.getElementById('listaRetiros');
     if (!div) return;
-    
-    const pendientes = window.retirosGlobal.filter(r => r.estado !== "Realizado");
-    
-    if (pendientes.length === 0) {
-        div.innerHTML = '<p style="text-align:center; color:#666; padding:40px;">No hay retiros pendientes.</p>';
+
+    const filtroEstado = document.getElementById('filtro_ret_estado')?.value || 'pendiente';
+    const busq = (document.getElementById('busq_retiro')?.value || '').toLowerCase();
+
+    const visibles = window.retirosGlobal.filter(r => {
+        if (!puedeVerRetiro(r)) return false;
+        if (filtroEstado !== 'todos' && r.estado !== filtroEstado) return false;
+        if (busq) {
+            const texto = `${r.num_retiro} ${r.cliente} ${r.localidad} ${r.pedido_por} ${r.observaciones}`.toLowerCase();
+            if (!texto.includes(busq)) return false;
+        }
+        return true;
+    });
+
+    document.getElementById('contador-retiros').innerText = `${visibles.length} retiros`;
+
+    if (visibles.length === 0) {
+        div.innerHTML = `<p style="text-align:center; color:#666; padding:40px;">No hay retiros ${filtroEstado === 'pendiente' ? 'pendientes' : filtroEstado === 'realizado' ? 'realizados' : ''} para mostrar.</p>`;
         return;
     }
-    
-    div.innerHTML = pendientes.map(r => `
-        <div class="card-retiro">
-            <div>
-                <b>${r.cliente || r.n || 'Sin nombre'}</b><br>
-                <small>${r.direccion || ''} (${r.localidad || ''})</small>
-            </div>
-            <button onclick="window.pasarRetiroAGuia('${r.id}')" style="background:var(--verde); color:white; border:none; padding:10px 15px; border-radius:5px; cursor:pointer;">USAR ➔</button>
-        </div>
-    `).join('');
+
+    div.innerHTML = visibles.map(r => {
+        const claseEstado = r.estado === 'realizado' ? 'realizado' : r.estado === 'cancelado' ? 'cancelado' : '';
+        const iconoEstado = r.estado === 'realizado' ? '✅' : r.estado === 'cancelado' ? '❌' : '🔶';
+        const infoGuia = r.guiaAsociada ? `<br>📄 Guía: <b>${r.guiaAsociada}</b>` : '';
+
+        let botones = '';
+        if (r.estado === 'pendiente') {
+            botones = `
+                <button class="btn-guia" onclick="pasarRetiroAGuia('${r.firebaseID}')">📦 Realizar Guía</button>
+                <button class="btn-cancelar" onclick="cancelarRetiro('${r.firebaseID}')">✕ Cancelar</button>`;
+        } else {
+            botones = `<button class="btn-ver" onclick="verRetiro('${r.firebaseID}')">👁️ Ver</button>`;
+        }
+
+        return `
+            <div class="card-retiro ${claseEstado}">
+                <div class="retiro-info">
+                    <div class="retiro-num">${iconoEstado} ${r.num_retiro}</div>
+                    <div class="retiro-cliente">${r.cliente || 'Sin nombre'}</div>
+                    <div class="retiro-datos">
+                        📍 ${r.direccion || ''} — <b>${r.localidad || ''}</b><br>
+                        📞 ${r.telefono || '-'} | 📦 ${r.bultos || '?'} bultos
+                        ${r.observaciones ? `<br>📝 ${r.observaciones}` : ''}
+                    </div>
+                    <div class="retiro-meta">
+                        Pedido por: <b>${r.pedido_por || '-'}</b> | Creado: ${r.fechaCreacion || ''} por ${r.creadoPor || ''}
+                        ${infoGuia}
+                    </div>
+                </div>
+                <div class="retiro-acciones">${botones}</div>
+            </div>`;
+    }).join('');
 }
 
-window.pasarRetiroAGuia = (id) => {
-    const r = window.retirosGlobal.find(x => x.id === id);
+// ============================================
+// RETIROS - ACCIONES
+// ============================================
+window.pasarRetiroAGuia = (firebaseID) => {
+    const r = window.retirosGlobal.find(x => x.firebaseID === firebaseID);
     if (!r) return;
-    
-    document.getElementById('r_n').value = r.cliente || r.n || "";
-    document.getElementById('r_d').value = r.direccion || "";
-    document.getElementById('r_l').value = r.localidad || "";
-    document.getElementById('r_t').value = r.telefono || "";
-    
+
+    // Guardar el número de retiro asociado
+    retiroAsociadoActual = r.num_retiro;
+
+    // Llenar el formulario de REMITENTE con los datos del retiro
+    document.getElementById('r_n').value = r.cliente || '';
+    document.getElementById('r_d').value = r.direccion || '';
+    document.getElementById('r_l').value = r.localidad || '';
+    document.getElementById('r_t').value = r.telefono || '';
+
+    // Llenar el DESTINATARIO con la sucursal que pidió (si existe)
+    if (r.pedido_por) {
+        document.getElementById('d_l').value = r.pedido_por;
+    }
+
+    // Mostrar aviso
+    document.getElementById('aviso-retiro').style.display = 'flex';
+    document.getElementById('retiro-asociado-num').innerText = r.num_retiro;
+
+    // Cambiar al tab de guías
     document.getElementById('btn-guia').click();
+};
+
+window.cancelarRetiroAsociado = function () {
+    retiroAsociadoActual = null;
+    document.getElementById('aviso-retiro').style.display = 'none';
+};
+
+window.cancelarRetiro = async (firebaseID) => {
+    if (!confirm("¿Estás seguro de cancelar este retiro?")) return;
+    try {
+        await update(ref(db, `moulin/retiros/${firebaseID}`), {
+            estado: 'cancelado',
+            canceladoPor: NOMBRE_OP,
+            fechaCancelado: new Date().toLocaleDateString('es-AR')
+        });
+    } catch (e) {
+        alert("Error al cancelar: " + e.message);
+    }
+};
+
+window.verRetiro = (firebaseID) => {
+    const r = window.retirosGlobal.find(x => x.firebaseID === firebaseID);
+    if (!r) return;
+    alert(`Retiro: ${r.num_retiro}\nCliente: ${r.cliente}\nDirección: ${r.direccion}\nLocalidad: ${r.localidad}\nTel: ${r.telefono}\nBultos: ${r.bultos}\nEstado: ${r.estado}\nPedido por: ${r.pedido_por}\nCreado: ${r.fechaCreacion} por ${r.creadoPor}\nObservaciones: ${r.observaciones || '-'}${r.guiaAsociada ? '\nGuía: ' + r.guiaAsociada : ''}`);
+};
+
+// ============================================
+// RETIROS - EXCEL
+// ============================================
+window.exportarRetirosExcel = () => {
+    const filtroEstado = document.getElementById('filtro_ret_estado')?.value || 'pendiente';
+    const visibles = window.retirosGlobal.filter(r => {
+        if (!puedeVerRetiro(r)) return false;
+        if (filtroEstado !== 'todos' && r.estado !== filtroEstado) return false;
+        return true;
+    });
+
+    if (!visibles.length) return alert("No hay retiros para exportar.");
+
+    const data = visibles.map(r => ({
+        'N° Retiro': r.num_retiro,
+        'Cliente': r.cliente,
+        'Dirección': r.direccion,
+        'Localidad': r.localidad,
+        'Teléfono': r.telefono,
+        'Bultos': r.bultos,
+        'Pedido por': r.pedido_por,
+        'Observaciones': r.observaciones || '',
+        'Estado': r.estado?.toUpperCase() || '',
+        'Creado por': r.creadoPor || '',
+        'Fecha Creación': r.fechaCreacion || '',
+        'Guía Asociada': r.guiaAsociada || '',
+        'Realizado por': r.realizadoPor || ''
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{wch:18},{wch:25},{wch:30},{wch:18},{wch:15},{wch:8},{wch:18},{wch:30},{wch:12},{wch:18},{wch:14},{wch:18},{wch:18}];
+    XLSX.utils.book_append_sheet(wb, ws, "Retiros");
+    XLSX.writeFile(wb, `Moulin_Retiros_${new Date().toISOString().split('T')[0]}.xlsx`);
 };
 
 // ============================================
@@ -569,8 +671,7 @@ window.pasarRetiroAGuia = (id) => {
 function renderTablaClientes() {
     const tbody = document.getElementById('cuerpoTablaClientes');
     if (!tbody) return;
-    
-    // Calcular deuda por cliente
+
     const deudaPorCliente = {};
     window.historialGlobal.forEach(g => {
         if (g.condicion === 'CTA CTE') {
@@ -582,11 +683,11 @@ function renderTablaClientes() {
             deudaPorCliente[cliente].total += Number(g.total || 0);
         }
     });
-    
+
     const clientesConDeuda = Object.entries(deudaPorCliente)
         .map(([nombre, data]) => ({ nombre, ...data }))
         .sort((a, b) => b.total - a.total);
-    
+
     tbody.innerHTML = clientesConDeuda.slice(0, 50).map(c => `
         <tr>
             <td><b>${c.nombre}</b></td>
@@ -594,32 +695,22 @@ function renderTablaClientes() {
             <td>${c.guias}</td>
             <td style="color:var(--rojo); font-weight:bold;">$${c.total.toLocaleString('es-AR')}</td>
             <td><button onclick="verDetalleCliente('${c.nombre}')" style="background:var(--azul); color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Ver Detalle</button></td>
-        </tr>
-    `).join('');
+        </tr>`).join('');
 }
 
 window.verDetalleCliente = (nombre) => {
-    const guiasCliente = window.historialGlobal.filter(g => 
+    const guiasCliente = window.historialGlobal.filter(g =>
         g.condicion === 'CTA CTE' && (g.r_n === nombre || g.d_n === nombre)
     );
-    
-    let html = `<h3>Detalle de Cuenta Corriente: ${nombre}</h3>`;
-    html += '<table class="tabla-items"><thead><tr><th>Guía</th><th>Fecha</th><th>Ruta</th><th>Total</th><th>Estado</th></tr></thead><tbody>';
-    
+    let html = `<h3>Cuenta Corriente: ${nombre}</h3>
+        <table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#1a4a7a;color:white;">
+        <th style="padding:8px;">Guía</th><th style="padding:8px;">Fecha</th><th style="padding:8px;">Ruta</th><th style="padding:8px;">Total</th><th style="padding:8px;">Estado</th></tr></thead><tbody>`;
     guiasCliente.forEach(g => {
-        html += `<tr>
-            <td>${g.num}</td>
-            <td>${g.fecha}</td>
-            <td>${g.r_l} → ${g.d_l}</td>
-            <td>$${Number(g.total).toLocaleString('es-AR')}</td>
-            <td>${g.estado}</td>
-        </tr>`;
+        html += `<tr><td style="padding:6px;border-bottom:1px solid #eee;">${g.num}</td><td style="padding:6px;border-bottom:1px solid #eee;">${g.fecha}</td><td style="padding:6px;border-bottom:1px solid #eee;">${g.r_l} → ${g.d_l}</td><td style="padding:6px;border-bottom:1px solid #eee;">$${Number(g.total).toLocaleString('es-AR')}</td><td style="padding:6px;border-bottom:1px solid #eee;">${g.estado}</td></tr>`;
     });
-    
     html += '</tbody></table>';
-    
     const win = window.open('', '_blank');
-    win.document.write(`<html><head><style>body{font-family:Arial;padding:20px;}table{width:100%;border-collapse:collapse;}th{background:#1a4a7a;color:white;padding:8px;}td{padding:6px;border-bottom:1px solid #eee;}</style></head><body>${html}</body></html>`);
+    win.document.write(`<html><head><style>body{font-family:Arial;padding:20px;}</style></head><body>${html}</body></html>`);
     win.document.close();
 };
 
