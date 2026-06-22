@@ -304,3 +304,71 @@ textarea { width: 98%; }
     .header-print { display: flex; align-items: center; border-bottom: 2px solid #000; padding-bottom: 5px; }
     .bultos-box { border: 2px solid #000; padding: 2px 8px; font-weight: bold; font-size: 15px; margin-top: 5px; display: inline-block; }
 }
+/* --- REPARTIDORES (TARJETAS) --- */
+.card-repartidor {
+    background: white;
+    border-left: 6px solid var(--verde);
+    padding: 12px 15px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.card-repartidor.inactivo {
+    border-left-color: #ccc;
+    opacity: 0.6;
+}
+
+.repartidor-info { flex: 1; min-width: 200px; }
+.repartidor-info .rep-nombre { font-weight: bold; font-size: 15px; color: var(--azul); }
+.repartidor-info .rep-datos { font-size: 12px; color: #666; margin-top: 3px; }
+.repartidor-info .rep-pin { 
+    display: inline-block; 
+    background: #fff3cd; 
+    border: 1px solid #ffc107; 
+    padding: 2px 8px; 
+    border-radius: 4px; 
+    font-family: monospace; 
+    font-size: 14px; 
+    letter-spacing: 3px;
+    margin-top: 5px;
+}
+
+.repartidor-acciones { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.repartidor-acciones button {
+    border: none;
+    padding: 8px 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+}
+
+.btn-editar-rep { background: var(--azul); }
+.btn-desactivar-rep { background: #dd6b20; }
+.btn-eliminar-rep { background: var(--rojo); }
+
+/* --- ESTADO EN_REPARTO EN GUÍAS --- */
+.en_reparto { 
+    background: #e9d8fd !important; 
+    color: #6b46c1 !important; 
+    border: 1px solid #6b46c1 !important;
+}
+
+/* --- BADGE REPARTIDOR EN HISTORIAL --- */
+.rep-badge {
+    display: inline-block;
+    background: #e9d8fd;
+    color: #6b46c1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+}
