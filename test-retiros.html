@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SISTEMA MOULIN V8.8 - PAGO ORIGEN/DESTINO</title>
+    <title>SISTEMA MOULIN V8.9 - GUÍAS + RETIROS + REPARTIDORES</title>
     
     <link rel="stylesheet" href="estilos-moulin.css">
     
@@ -15,28 +15,27 @@
 
 <!-- NAVEGACIÓN POR TABS -->
 <nav class="nav-tabs no-print">
-    <button id="btn-guia" class="active" data-tab="tab-guia">📦 EMITIR GUÍA</button>
+    <button id="btn-guia" class="active" data-tab="tab-guia">📦 GUÍAS</button>
     <button id="btn-retiros" data-tab="tab-retiros">🚚 RETIROS <span id="badge-retiros" class="badge" style="display:none">0</span></button>
+    <button id="btn-repartidores" data-tab="tab-repartidores">🏍️ REPARTIDORES <span id="badge-repartidores" class="badge">0</span></button>
     <button id="btn-ctacte" data-tab="tab-ctacte">💰 CTA CTE <span id="badge-clientes" class="badge">0</span></button>
 </nav>
 
 <!-- ============================================ -->
-<!-- TAB 1: EMITIR GUÍA -->
+<!-- TAB 1: EMITIR GUÍA (sin cambios) -->
 <!-- ============================================ -->
 <main id="tab-guia" class="tab-content active no-print">
     <div class="hoja">
         <header class="header-guia" style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--azul); margin-bottom:20px;">
-            <h2>MOULIN V8.8</h2>
+            <h2>MOULIN V8.9</h2>
             <div class="info-guia"><small>N° GUÍA:</small><br><b id="display_guia" class="num-rojo">---</b></div>
         </header>
 
-        <!-- Retiro asociado (aparece solo cuando se viene de un retiro) -->
         <div id="aviso-retiro" class="aviso-retiro" style="display:none;">
             🚚 Generando guía desde retiro: <b id="retiro-asociado-num"></b>
             <button onclick="cancelarRetiroAsociado()" style="margin-left:10px; background:var(--rojo); color:white; border:none; padding:3px 10px; border-radius:4px; cursor:pointer;">✕ Quitar</button>
         </div>
 
-        <!-- Filtros -->
         <div style="display:flex; gap:5px; flex-wrap:wrap; margin-bottom:10px; align-items:center;">
             <input type="date" id="f_desde" onchange="renderHistorial()" style="width:130px;" title="Desde">
             <input type="date" id="f_hasta" onchange="renderHistorial()" style="width:130px;" title="Hasta">
@@ -46,7 +45,6 @@
             <button onclick="descargarExcel()" style="background:#1d6f42; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">📊 Exportar Excel</button>
         </div>
 
-        <!-- Remitente / Destinatario -->
         <section class="caja grid-2">
             <div id="form-remitente">
                 <b>REMITENTE</b>
@@ -66,7 +64,6 @@
             </div>
         </section>
 
-        <!-- Tabla de Items -->
         <section class="caja">
             <table class="tabla-items">
                 <thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unitario $</th><th>V.Decl $</th><th></th></tr></thead>
@@ -75,7 +72,6 @@
             <button id="add-item" style="margin-top:10px;">+ Agregar Bulto</button>
         </section>
 
-        <!-- Condiciones de Pago -->
         <section class="caja caja-condiciones">
             <div class="campo-cond">
                 <label>Lugar de Pago</label>
@@ -107,18 +103,18 @@
             </div>
         </section>
 
-        <!-- Historial -->
         <section class="historial-container">
             <h4 style="margin-top:20px; border-bottom:1px solid #ccc;">HISTORIAL RECIENTE</h4>
             <div style="display:flex; gap:5px; margin-bottom:10px;">
                 <button class="btn-f active" onclick="cambiarFiltroEstado('todos', this)">Todos</button>
                 <button class="btn-f" onclick="cambiarFiltroEstado('recibido', this)">Recibidos</button>
                 <button class="btn-f" onclick="cambiarFiltroEstado('deposito', this)">Depósito</button>
+                <button class="btn-f" onclick="cambiarFiltroEstado('en_reparto', this)">En Reparto</button>
                 <button class="btn-f" onclick="cambiarFiltroEstado('entregado', this)">Entregados</button>
             </div>
             <input type="text" id="busq" placeholder="🔍 Buscar..." oninput="renderHistorial()" style="width:100%; padding:8px; border:2px solid var(--azul); margin-bottom:10px;">
             <table class="tabla-items">
-                <thead><tr style="background:#eee;"><th>Guía</th><th>Retiro</th><th>Fecha</th><th>Ruta</th><th>Total</th><th>Estado</th><th></th></tr></thead>
+                <thead><tr style="background:#eee;"><th>Guía</th><th>Retiro</th><th>Fecha</th><th>Ruta</th><th>Total</th><th>Repartidor</th><th>Estado</th><th></th></tr></thead>
                 <tbody id="listaHistorial"></tbody>
             </table>
         </section>
@@ -126,7 +122,7 @@
 </main>
 
 <!-- ============================================ -->
-<!-- TAB 2: RETIROS -->
+<!-- TAB 2: RETIROS (sin cambios) -->
 <!-- ============================================ -->
 <main id="tab-retiros" class="tab-content no-print">
     <div class="hoja">
@@ -135,7 +131,6 @@
             <button onclick="toggleFormRetiro()" class="btn-nuevo-retiro">+ Nuevo Retiro</button>
         </div>
 
-        <!-- FORMULARIO DE RETIRO (oculto por defecto) -->
         <div id="form-retiro-container" class="caja" style="display:none; border-left:5px solid var(--naranja);">
             <h4 style="margin-top:0;">Nueva Solicitud de Retiro</h4>
             <div class="grid-2">
@@ -164,7 +159,6 @@
             </div>
         </div>
 
-        <!-- FILTROS DE RETIROS -->
         <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap; align-items:center;">
             <select id="filtro_ret_estado" onchange="renderRetiros()" style="width:150px;">
                 <option value="pendiente">⏳ Pendientes</option>
@@ -176,13 +170,74 @@
             <span id="contador-retiros" style="margin-left:auto; color:#666; font-size:12px;"></span>
         </div>
 
-        <!-- LISTA DE RETIROS -->
         <div id="listaRetiros"></div>
     </div>
 </main>
 
 <!-- ============================================ -->
-<!-- TAB 3: CUENTA CORRIENTE -->
+<!-- TAB 3: REPARTIDORES (NUEVO) -->
+<!-- ============================================ -->
+<main id="tab-repartidores" class="tab-content no-print">
+    <div class="hoja">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--azul); padding-bottom:10px; margin-bottom:15px;">
+            <h3 style="margin:0; color:var(--azul);">🏍️ GESTIÓN DE REPARTIDORES</h3>
+            <button onclick="toggleFormRepartidor()" class="btn-nuevo-retiro" style="background:var(--verde);">+ Nuevo Repartidor</button>
+        </div>
+
+        <!-- FORMULARIO DE REPARTIDOR -->
+        <div id="form-repartidor-container" class="caja" style="display:none; border-left:5px solid var(--verde);">
+            <h4 id="form-rep-titulo" style="margin-top:0;">Nuevo Repartidor</h4>
+            <input type="hidden" id="rep_editando_id" value="">
+            <div class="grid-2">
+                <div>
+                    <label class="label-form">Nombre completo *</label>
+                    <input type="text" id="rep_nombre" placeholder="Ej: Juan Pérez">
+                    <label class="label-form">Teléfono</label>
+                    <input type="text" id="rep_telefono" placeholder="Teléfono de contacto">
+                    <label class="label-form">Vehículo (opcional)</label>
+                    <input type="text" id="rep_vehiculo" placeholder="Ej: Camioneta ABC123">
+                </div>
+                <div>
+                    <label class="label-form">PIN de acceso (4 dígitos) *</label>
+                    <input type="text" id="rep_pin" maxlength="4" pattern="[0-9]{4}" placeholder="1234" style="font-size:20px; letter-spacing:8px; text-align:center;">
+                    <small style="color:#666;">PIN que usará el repartidor para iniciar sesión en el móvil</small>
+                    <label class="label-form" style="margin-top:15px;">Estado</label>
+                    <select id="rep_activo">
+                        <option value="true">✅ Activo</option>
+                        <option value="false">❌ Inactivo (no puede iniciar sesión)</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button onclick="guardarRepartidor()" style="background:var(--verde); color:white; border:none; padding:10px 25px; border-radius:5px; cursor:pointer; font-weight:bold;">💾 Guardar</button>
+                <button onclick="toggleFormRepartidor()" style="background:#ccc; color:#333; border:none; padding:10px 25px; border-radius:5px; cursor:pointer;">Cancelar</button>
+            </div>
+        </div>
+
+        <!-- INFO Y FILTROS -->
+        <div class="caja" style="background:#e3f2fd; border-left:4px solid var(--azul); padding:10px 15px;">
+            <small>
+                <b>ℹ️ Cómo funciona:</b> Los repartidores que crees acá pueden iniciar sesión en la app móvil 
+                (eligiendo su nombre + PIN). Solo verán las guías que les asignes específicamente.
+                <br><br>
+                <b>📍 Sucursal actual:</b> <span id="info-sucursal-rep" style="font-weight:bold;">---</span>
+                | Los repartidores que crees quedan asociados a esta sucursal.
+            </small>
+        </div>
+
+        <!-- LISTA DE REPARTIDORES -->
+        <div style="margin-top:15px;">
+            <h4 style="color:var(--azul);">Repartidores de tu sucursal</h4>
+            <div id="listaRepartidores" style="margin-top:10px;"></div>
+        </div>
+
+        <!-- ESTADÍSTICAS RÁPIDAS -->
+        <div id="stats-repartidores" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-top:20px;"></div>
+    </div>
+</main>
+
+<!-- ============================================ -->
+<!-- TAB 4: CUENTA CORRIENTE -->
 <!-- ============================================ -->
 <main id="tab-ctacte" class="tab-content no-print">
     <div class="hoja">
@@ -198,16 +253,13 @@
     </div>
 </main>
 
-<!-- FOOTER FIJO -->
 <footer class="footer-fijo no-print">
     <div id="total_txt" style="font-size:24px; color:#48bb78;">TOTAL: $ 0.00</div>
     <button id="btn-emitir" class="btn-emitir">GRABAR E IMPRIMIR</button>
 </footer>
 
-<!-- SECCIÓN DE IMPRESIÓN -->
 <div id="seccion-impresion"></div>
 
-<!-- Datalist para localidades de retiro -->
 <datalist id="lista_localidades_retiro">
     <option value="RECONQUISTA">
     <option value="ROSARIO">
