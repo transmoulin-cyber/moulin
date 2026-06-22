@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOULIN V8.9 - Acceso de Prueba</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #102a43 0%, #243b55 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+        }
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            text-align: center;
+            width: 320px;
+        }
+        img { width: 120px; margin-bottom: 20px; }
+        h2 { color: #102a43; margin-bottom: 10px; }
+        .badge-version {
+            background: #38a169;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #38a169;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover { background: #2f855a; }
+        .error { color: red; font-size: 14px; margin-top: 10px; display: none; }
+        .aviso {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #856404;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-card">
+    <img src="logo.png" onerror="this.src='https://via.placeholder.com/120x60?text=MOULIN'">
+    <h2>SISTEMA LOGÍSTICA</h2>
+    <span class="badge-version">V8.9 - PRUEBA</span>
+    
+    <input type="text" id="user" placeholder="Usuario">
+    <input type="password" id="pass" placeholder="Contraseña">
+    
+    <button onclick="intentarIngreso()">INGRESAR AL SISTEMA NUEVO</button>
+    <div id="errorMsg" class="error">Usuario o clave incorrectos</div>
+    
+    <div class="aviso">
+        ⚠️ Este es el sistema de PRUEBA.<br>
+        El sistema en producción sigue en <b>index.html</b>
+    </div>
+</div>
+
+<script>
+    // MISMAS CREDENCIALES QUE EL SISTEMA ACTUAL
+    const usuarios = [
+        { u: "admin", p: "moulin2024", nombre: "Administración", prefijo: "TODO" }, 
+        { u: "rosario", p: "moulinros", nombre: "Chofer Rosario", prefijo: "ROS" },
+        { u: "santafe", p: "moulinsfe", nombre: "Chofer Santa Fe", prefijo: "STAFE" },
+        { u: "recon", p: "moulinrec", nombre: "Chofer Reconquista", prefijo: "REC" },
+        { u: "bsas", p: "moulinbsas", nombre: "Chofer BSAS", prefijo: "BSAS" }
+    ];
+
+    function intentarIngreso() {
+        const uInput = document.getElementById('user').value.toLowerCase();
+        const pInput = document.getElementById('pass').value;
+        const error = document.getElementById('errorMsg');
+
+        const encontrado = usuarios.find(x => x.u === uInput && x.p === pInput);
+
+        if (encontrado) {
+            sessionStorage.setItem('moulin_sesion', JSON.stringify(encontrado));
+            // REDIRIGE AL SISTEMA NUEVO
+            window.location.href = "test-retiros.html";
+        } else {
+            error.style.display = 'block';
+        }
+    }
+
+    document.addEventListener('keypress', (e) => {
+        if(e.key === 'Enter') intentarIngreso();
+    });
+</script>
+
+</body>
+</html>
