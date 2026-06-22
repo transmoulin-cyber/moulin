@@ -415,23 +415,24 @@ window.renderHistorial = () => {
     });
 
     window.datosParaExcel = filtrados;
-
-    document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map(g => `
-        <tr>
-            <td><b>${g.num || ''}</b></td>
-            <td><small>${g.retiro_asociado || '-'}</small></td>
-            <td>${g.fecha || ''}</td>
-            <td>${g.r_n || ''} > ${g.d_n || ''}</td>
-            <td>$${Number(g.total || 0).toLocaleString('es-AR')}</td>
-            <td>
-                <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px; background:${g.estado === 'entregado' ? '#d4edda' : 'white'}">
-                    <option value="recibido" ${g.estado === 'recibido' ? 'selected' : ''}>Recibido</option>
-                    <option value="deposito" ${g.estado === 'deposito' ? 'selected' : ''}>Depósito</option>
-                    <option value="entregado" ${g.estado === 'entregado' ? 'selected' : ''}>Entregado</option>
-                </select>
-            </td>
-            <td><button onclick="reimprimir('${g.num}')" title="Reimprimir">🖨️</button></td>
-        </tr>`).join('');
+document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map(g => `
+    <tr>
+        <td><b>${g.num || ''}</b></td>
+        <td><small>${g.retiro_asociado || '-'}</small></td>
+        <td>${g.fecha || ''}</td>
+        <td>${g.r_n || ''} > ${g.d_n || ''}</td>
+        <td>$${Number(g.total || 0).toLocaleString('es-AR')}</td>
+        <td>${g.asignado_a ? `<span class="rep-badge">🏍️ ${g.asignado_a}</span>` : '<small style="color:#999;">-</small>'}</td>
+        <td>
+            <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px; background:${g.estado === 'entregado' ? '#d4edda' : g.estado === 'en_reparto' ? '#e9d8fd' : 'white'}">
+                <option value="recibido" ${g.estado === 'recibido' ? 'selected' : ''}>Recibido</option>
+                <option value="deposito" ${g.estado === 'deposito' ? 'selected' : ''}>Depósito</option>
+                <option value="en_reparto" ${g.estado === 'en_reparto' ? 'selected' : ''}>En Reparto</option>
+                <option value="entregado" ${g.estado === 'entregado' ? 'selected' : ''}>Entregado</option>
+            </select>
+        </td>
+        <td><button onclick="reimprimir('${g.num}')" title="Reimprimir">🖨️</button></td>
+    </tr>`).join('');
 };
 
 window.actualizarEstadoNube = (id, est) => {
@@ -713,7 +714,215 @@ window.verDetalleCliente = (nombre) => {
     win.document.write(`<html><head><style>body{font-family:Arial;padding:20px;}</style></head><body>${html}</body></html>`);
     win.document.close();
 };
+// ============================================
+// REPARTIDORES
+// ============================================
+window.repartidoresGlobal = [];
 
+// Listener de repartidores
+onValue(ref(db, 'moulin/repartidores'), (snapshot) => {
+    const data = snapshot.val();
+    const todos = data ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })) : [];
+    
+    // Filtrar por sucursal (salvo admin)
+    window.repartidoresGlobal = ES_ADMIN 
+        ? todos 
+        : todos.filter(r => (r.sucursal || '').toUpperCase() === NOMBRE_SUCURSAL);
+    
+    const badge = document.getElementById('badge-repartidores');
+    if (badge) badge.innerText = window.repartidoresGlobal.filter(r => r.activo !== false).length;
+    
+    renderRepartidores();
+    renderStatsRepartidores();
+});
+
+window.toggleFormRepartidor = function (editandoID = null) {
+    const form = document.getElementById('form-repartidor-container');
+    const titulo = document.getElementById('form-rep-titulo');
+    const isVisible = form.style.display === 'block';
+    
+    form.style.display = isVisible ? 'none' : 'block';
+    
+    if (!isVisible && editandoID) {
+        // Modo edición
+        const rep = window.repartidoresGlobal.find(r => r.firebaseID === editandoID);
+        if (rep) {
+            titulo.innerText = `Editar Repartidor: ${rep.nombre}`;
+            document.getElementById('rep_editando_id').value = editandoID;
+            document.getElementById('rep_nombre').value = rep.nombre || '';
+            document.getElementById('rep_telefono').value = rep.telefono || '';
+            document.getElementById('rep_vehiculo').value = rep.vehiculo || '';
+            document.getElementById('rep_pin').value = rep.pin || '';
+            document.getElementById('rep_activo').value = (rep.activo !== false).toString();
+        }
+    } else if (!isVisible) {
+        // Modo nuevo
+        titulo.innerText = 'Nuevo Repartidor';
+        document.getElementById('rep_editando_id').value = '';
+        ['rep_nombre', 'rep_telefono', 'rep_vehiculo', 'rep_pin'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        document.getElementById('rep_activo').value = 'true';
+    } else {
+        // Cerrando
+        document.getElementById('rep_editando_id').value = '';
+    }
+};
+
+window.guardarRepartidor = async function () {
+    const nombre = document.getElementById('rep_nombre').value.trim();
+    const pin = document.getElementById('rep_pin').value.trim();
+    
+    if (!nombre) return alert("⚠️ Ingresá el nombre del repartidor.");
+    if (!/^\d{4}$/.test(pin)) return alert("⚠️ El PIN debe tener 4 dígitos numéricos.");
+    
+    const editandoID = document.getElementById('rep_editando_id').value;
+    
+    const datos = {
+        nombre: nombre,
+        telefono: document.getElementById('rep_telefono').value.trim(),
+        vehiculo: document.getElementById('rep_vehiculo').value.trim(),
+        pin: pin,
+        activo: document.getElementById('rep_activo').value === 'true',
+        sucursal: NOMBRE_SUCURSAL,
+        timestamp: Date.now()
+    };
+    
+    try {
+        if (editandoID) {
+            // Editar
+            await update(ref(db, `moulin/repartidores/${editandoID}`), datos);
+        } else {
+            // Crear nuevo
+            datos.creadoPor = NOMBRE_OP;
+            datos.fechaCreacion = new Date().toLocaleDateString('es-AR');
+            await set(ref(db, `moulin/repartidores/${Date.now()}`), datos);
+        }
+        toggleFormRepartidor();
+    } catch (e) {
+        alert("❌ Error al guardar: " + e.message);
+    }
+};
+
+window.eliminarRepartidor = async (firebaseID) => {
+    const rep = window.repartidoresGlobal.find(r => r.firebaseID === firebaseID);
+    if (!rep) return;
+    if (!confirm(`¿Eliminar definitivamente a ${rep.nombre}?`)) return;
+    
+    try {
+        // Usamos update con null para "borrar" (Firebase no permite delete real vía web)
+        await update(ref(db, `moulin/repartidores/${firebaseID}`), { activo: false, eliminado: true });
+    } catch (e) {
+        alert("Error al eliminar: " + e.message);
+    }
+};
+
+window.toggleActivoRepartidor = async (firebaseID) => {
+    const rep = window.repartidoresGlobal.find(r => r.firebaseID === firebaseID);
+    if (!rep) return;
+    
+    try {
+        await update(ref(db, `moulin/repartidores/${firebaseID}`), { 
+            activo: !(rep.activo !== false) 
+        });
+    } catch (e) {
+        alert("Error al cambiar estado: " + e.message);
+    }
+};
+
+function renderRepartidores() {
+    const div = document.getElementById('listaRepartidores');
+    if (!div) return;
+    
+    // Info sucursal
+    const infoSuc = document.getElementById('info-sucursal-rep');
+    if (infoSuc) infoSuc.innerText = NOMBRE_SUCURSAL;
+    
+    const activos = window.repartidoresGlobal.filter(r => r.activo !== false && !r.eliminado);
+    const inactivos = window.repartidoresGlobal.filter(r => r.activo === false && !r.eliminado);
+    
+    if (activos.length === 0 && inactivos.length === 0) {
+        div.innerHTML = `<p style="text-align:center; color:#666; padding:30px;">
+            No hay repartidores cargados.<br>
+            <button onclick="toggleFormRepartidor()" style="margin-top:10px; background:var(--verde); color:white; border:none; padding:8px 16px; border-radius:5px; cursor:pointer;">+ Crear el primero</button>
+        </p>`;
+        return;
+    }
+    
+    let html = '';
+    
+    if (activos.length > 0) {
+        html += `<h5 style="color:var(--verde); margin-top:10px;">✅ Activos (${activos.length})</h5>`;
+        html += activos.map(r => renderCardRepartidor(r, true)).join('');
+    }
+    
+    if (inactivos.length > 0) {
+        html += `<h5 style="color:#999; margin-top:15px;">❌ Inactivos (${inactivos.length})</h5>`;
+        html += inactivos.map(r => renderCardRepartidor(r, false)).join('');
+    }
+    
+    div.innerHTML = html;
+}
+
+function renderCardRepartidor(r, activo) {
+    // Contar guías asignadas en reparto a este repartidor
+    const enReparto = window.historialGlobal.filter(g => 
+        g.asignado_a === r.nombre && g.estado === 'en_reparto'
+    ).length;
+    
+    const entregadas = window.historialGlobal.filter(g => 
+        g.asignado_a === r.nombre && g.estado === 'entregado'
+    ).length;
+    
+    return `
+        <div class="card-repartidor ${activo ? '' : 'inactivo'}">
+            <div class="repartidor-info">
+                <div class="rep-nombre">🏍️ ${r.nombre}</div>
+                <div class="rep-datos">
+                    ${r.telefono ? `📞 ${r.telefono}` : ''} 
+                    ${r.vehiculo ? `| 🚗 ${r.vehiculo}` : ''}
+                    ${enReparto > 0 ? `<br><span style="color:#6b46c1; font-weight:bold;">📦 ${enReparto} en reparto ahora</span>` : ''}
+                    ${entregadas > 0 ? ` | ✅ ${entregadas} entregadas` : ''}
+                </div>
+                <div class="rep-pin">PIN: ${r.pin || '----'}</div>
+            </div>
+            <div class="repartidor-acciones">
+                <button class="btn-editar-rep" onclick="toggleFormRepartidor('${r.firebaseID}')">✏️ Editar</button>
+                <button class="btn-desactivar-rep" onclick="toggleActivoRepartidor('${r.firebaseID}')">
+                    ${activo ? '⏸️ Desactivar' : '▶️ Activar'}
+                </button>
+                <button class="btn-eliminar-rep" onclick="eliminarRepartidor('${r.firebaseID}')">🗑️</button>
+            </div>
+        </div>`;
+}
+
+function renderStatsRepartidores() {
+    const div = document.getElementById('stats-repartidores');
+    if (!div) return;
+    
+    const activos = window.repartidoresGlobal.filter(r => r.activo !== false && !r.eliminado).length;
+    const enReparto = window.historialGlobal.filter(g => g.asignado_a && g.estado === 'en_reparto').length;
+    const entregadasHoy = window.historialGlobal.filter(g => {
+        if (!g.asignado_a || g.estado !== 'entregado') return false;
+        return g.fecha === new Date().toLocaleDateString('es-AR');
+    }).length;
+    
+    div.innerHTML = `
+        <div class="caja" style="text-align:center;">
+            <div style="font-size:28px; font-weight:bold; color:var(--verde);">${activos}</div>
+            <small>Repartidores activos</small>
+        </div>
+        <div class="caja" style="text-align:center;">
+            <div style="font-size:28px; font-weight:bold; color:#6b46c1;">${enReparto}</div>
+            <small>En reparto ahora</small>
+        </div>
+        <div class="caja" style="text-align:center;">
+            <div style="font-size:28px; font-weight:bold; color:var(--azul);">${entregadasHoy}</div>
+            <small>Entregadas hoy</small>
+        </div>
+    `;
+}
 // ============================================
 // INICIALIZACIÓN
 // ============================================
