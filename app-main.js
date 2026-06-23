@@ -422,7 +422,12 @@ document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map
         <td>${g.fecha || ''}</td>
         <td>${g.r_n || ''} > ${g.d_n || ''}</td>
         <td>$${Number(g.total || 0).toLocaleString('es-AR')}</td>
-        <td>${g.asignado_a ? `<span class="rep-badge">🏍️ ${g.asignado_a}</span>` : '<small style="color:#999;">-</small>'}</td>
+<td>
+    <select onchange="asignarRepartidor('${g.firebaseID}', this.value)" style="font-size:11px; padding:4px; border-radius:4px; border:1px solid #6b46c1;">
+        <option value="">-- Sin asignar --</option>
+        ${window.repartidoresGlobal.filter(r => r.activo !== false && !r.eliminado).map(r => `<option value="${r.nombre}" ${g.asignado_a === r.nombre ? 'selected' : ''}>${r.nombre}</option>`).join('')}
+    </select>
+</td>
         <td>
             <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px; background:${g.estado === 'entregado' ? '#d4edda' : g.estado === 'en_reparto' ? '#e9d8fd' : 'white'}">
                 <option value="recibido" ${g.estado === 'recibido' ? 'selected' : ''}>Recibido</option>
@@ -438,7 +443,22 @@ document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map
 window.actualizarEstadoNube = (id, est) => {
     update(ref(db, `moulin/guias/${id}`), { estado: est }).catch(err => alert("Error: " + err.message));
 };
-
+window.asignarRepartidor = async (guiaID, nombreRepartidor) => {
+    try {
+        await update(ref(db, `moulin/guias/${guiaID}`), { 
+            asignado_a: nombreRepartidor || null,
+            fecha_asignacion: nombreRepartidor ? new Date().toLocaleString('es-AR') : null,
+            asignado_por: NOMBRE_OP
+        });
+        
+        // Si se asignó un repartidor, cambiar estado a "en_reparto" automáticamente
+        if (nombreRepartidor) {
+            await update(ref(db, `moulin/guias/${guiaID}`), { estado: 'en_reparto' });
+        }
+    } catch (e) {
+        alert("Error al asignar: " + e.message);
+    }
+};
 window.reimprimir = (num) => {
     const g = window.historialGlobal.find(x => x.num === num);
     if (g) imprimir(g); else alert("Guía no encontrada.");
@@ -548,15 +568,24 @@ function renderRetiros() {
         const iconoEstado = r.estado === 'realizado' ? '✅' : r.estado === 'cancelado' ? '❌' : '🔶';
         const infoGuia = r.guiaAsociada ? `<br>📄 Guía: <b>${r.guiaAsociada}</b>` : '';
 
-        let botones = '';
-        if (r.estado === 'pendiente') {
-            botones = `
-                <button class="btn-guia" onclick="pasarRetiroAGuia('${r.firebaseID}')">📦 Realizar Guía</button>
-                <button class="btn-cancelar" onclick="cancelarRetiro('${r.firebaseID}')">✕ Cancelar</button>`;
-        } else {
-            botones = `<button class="btn-ver" onclick="verRetiro('${r.firebaseID}')">👁️ Ver</button>`;
-        }
+// Generar opciones de repartidores
+const opcionesRep = window.repartidoresGlobal
+    .filter(rep => rep.activo !== false && !rep.eliminado)
+    .map(rep => `<option value="${rep.nombre}" ${r.asignado_a === rep.nombre ? 'selected' : ''}>${rep.nombre}</option>`)
+    .join('');
 
+let botones = '';
+if (r.estado === 'pendiente') {
+    botones = `
+        <select onchange="asignarRepartidorRetiro('${r.firebaseID}', this.value)" style="font-size:11px; padding:6px; border-radius:4px; border:1px solid #6b46c1; margin-bottom:5px; width:100%;">
+            <option value="">🏍️ Asignar repartidor...</option>
+            ${opcionesRep}
+        </select>
+        <button class="btn-guia" onclick="pasarRetiroAGuia('${r.firebaseID}')">📦 Realizar Guía</button>
+        <button class="btn-cancelar" onclick="cancelarRetiro('${r.firebaseID}')">✕ Cancelar</button>`;
+} else {
+    botones = `<button class="btn-ver" onclick="verRetiro('${r.firebaseID}')">👁️ Ver</button>`;
+}
         return `
             <div class="card-retiro ${claseEstado}">
                 <div class="retiro-info">
@@ -629,7 +658,17 @@ window.verRetiro = (firebaseID) => {
     if (!r) return;
     alert(`Retiro: ${r.num_retiro}\nCliente: ${r.cliente}\nDirección: ${r.direccion}\nLocalidad: ${r.localidad}\nTel: ${r.telefono}\nBultos: ${r.bultos}\nEstado: ${r.estado}\nPedido por: ${r.pedido_por}\nCreado: ${r.fechaCreacion} por ${r.creadoPor}\nObservaciones: ${r.observaciones || '-'}${r.guiaAsociada ? '\nGuía: ' + r.guiaAsociada : ''}`);
 };
-
+window.asignarRepartidorRetiro = async (retiroID, nombreRepartidor) => {
+    try {
+        await update(ref(db, `moulin/retiros/${retiroID}`), { 
+            asignado_a: nombreRepartidor || null,
+            fecha_asignacion: nombreRepartidor ? new Date().toLocaleString('es-AR') : null,
+            asignado_por: NOMBRE_OP
+        });
+    } catch (e) {
+        alert("Error al asignar: " + e.message);
+    }
+};
 // ============================================
 // RETIROS - EXCEL
 // ============================================
