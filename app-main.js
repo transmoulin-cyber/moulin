@@ -782,6 +782,17 @@ window.toggleFormRepartidor = function (editandoID = null) {
     
     form.style.display = isVisible ? 'none' : 'block';
     
+    // Mostrar/ocultar selector de sucursal según sea admin
+    const selectSucursal = document.getElementById('rep_sucursal');
+    const labelSucursal = document.getElementById('label-sucursal-rep');
+    if (ES_ADMIN) {
+        selectSucursal.style.display = 'block';
+        labelSucursal.style.display = 'block';
+    } else {
+        selectSucursal.style.display = 'none';
+        labelSucursal.style.display = 'none';
+    }
+    
     if (!isVisible && editandoID) {
         // Modo edición
         const rep = window.repartidoresGlobal.find(r => r.firebaseID === editandoID);
@@ -793,6 +804,9 @@ window.toggleFormRepartidor = function (editandoID = null) {
             document.getElementById('rep_vehiculo').value = rep.vehiculo || '';
             document.getElementById('rep_pin').value = rep.pin || '';
             document.getElementById('rep_activo').value = (rep.activo !== false).toString();
+            if (ES_ADMIN) {
+                document.getElementById('rep_sucursal').value = rep.sucursal || 'RECON';
+            }
         }
     } else if (!isVisible) {
         // Modo nuevo
@@ -803,6 +817,9 @@ window.toggleFormRepartidor = function (editandoID = null) {
             if (el) el.value = '';
         });
         document.getElementById('rep_activo').value = 'true';
+        if (ES_ADMIN) {
+            document.getElementById('rep_sucursal').value = 'RECON'; // Valor por defecto
+        }
     } else {
         // Cerrando
         document.getElementById('rep_editando_id').value = '';
