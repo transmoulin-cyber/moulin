@@ -773,6 +773,9 @@ onValue(ref(db, 'moulin/repartidores'), (snapshot) => {
     
     renderRepartidores();
     renderStatsRepartidores();
+
+     window.renderHistorial();   // Re-renderizar historial
+    renderRetiros();             // Re-renderizar retiros
 });
 
 window.toggleFormRepartidor = function (editandoID = null) {
