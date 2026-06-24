@@ -196,7 +196,17 @@
                     <input type="text" id="rep_telefono" placeholder="Teléfono de contacto">
                     <label class="label-form">Vehículo (opcional)</label>
                     <input type="text" id="rep_vehiculo" placeholder="Ej: Camioneta ABC123">
+                 <label class="label-form" id="label-sucursal-rep">Sucursal</label>
+    <select id="rep_sucursal" style="display:none;">
+        <option value="RECON">Reconquista</option>
+        <option value="ROS">Rosario</option>
+        <option value="STAFE">Santa Fe</option>
+        <option value="BSAS">Buenos Aires</option>
+    </select>
+</div>
+                
                 </div>
+                
                 <div>
                     <label class="label-form">PIN de acceso (4 dígitos) *</label>
                     <input type="text" id="rep_pin" maxlength="4" pattern="[0-9]{4}" placeholder="1234" style="font-size:20px; letter-spacing:8px; text-align:center;">
@@ -212,6 +222,7 @@
                 <button onclick="guardarRepartidor()" style="background:var(--verde); color:white; border:none; padding:10px 25px; border-radius:5px; cursor:pointer; font-weight:bold;">💾 Guardar</button>
                 <button onclick="toggleFormRepartidor()" style="background:#ccc; color:#333; border:none; padding:10px 25px; border-radius:5px; cursor:pointer;">Cancelar</button>
             </div>
+            
         </div>
 
         <!-- INFO Y FILTROS -->
