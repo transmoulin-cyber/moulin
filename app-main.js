@@ -835,13 +835,18 @@ window.guardarRepartidor = async function () {
     
     const editandoID = document.getElementById('rep_editando_id').value;
     
+    // Si es admin, usar la sucursal seleccionada; si no, usar la de la sesión
+    const sucursal = ES_ADMIN 
+        ? document.getElementById('rep_sucursal').value 
+        : NOMBRE_SUCURSAL;
+    
     const datos = {
         nombre: nombre,
         telefono: document.getElementById('rep_telefono').value.trim(),
         vehiculo: document.getElementById('rep_vehiculo').value.trim(),
         pin: pin,
         activo: document.getElementById('rep_activo').value === 'true',
-        sucursal: NOMBRE_SUCURSAL,
+        sucursal: sucursal,  // 👈 CAMBIO ACÁ
         timestamp: Date.now()
     };
     
