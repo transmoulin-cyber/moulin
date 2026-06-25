@@ -24,6 +24,7 @@
         const db = getDatabase(app);
         
         window.historial = [];
+        window.retiros = [];  // 👇 AGREGAR ESTA LÍNEA
         window.filtroEstadoActual = 'todos';
         window.sesionActual = null;
 
@@ -160,6 +161,30 @@
                 }
                 renderizarLista();
             });
+              // Listener de RETIROS
+    onValue(ref(db, 'moulin/retiros'), (snapshot) => {
+        const data = snapshot.val();
+        let retirosCompleta = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})) : [];
+        retirosCompleta.sort((a,b) => b.timestamp - a.timestamp);
+        
+        if (esRepartidor) {
+            // REPARTIDOR: solo ver retiros asignados a él
+            window.retiros = retirosCompleta.filter(r => 
+                r.asignado_a === sesion.nombre && r.estado === 'pendiente'
+            );
+        } else if (prefijoUser !== "TODO" && prefijoUser !== "ADM") {
+            // DEPÓSITO: filtro por sucursal
+            window.retiros = retirosCompleta.filter(r => {
+                const localidad = (r.localidad || '').toUpperCase();
+                const pedidoPor = (r.pedido_por || '').toUpperCase();
+                return localidad === prefijoUser || pedidoPor === prefijoUser;
+            });
+        } else {
+            window.retiros = retirosCompleta;
+        }
+        renderizarLista();
+    });
+}
         }
 
         // ============================================
