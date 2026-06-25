@@ -283,6 +283,51 @@
         document.getElementById('qrTitle').innerText = num;
     };
     window.cerrarQR = () => { document.getElementById('modalQR').style.display = 'none'; };
+
+    // ============================================
+// CAMBIO DE MODO LOGIN
+// ============================================
+window.cambiarModoLogin = () => {
+    const modo = document.querySelector('input[name="modo-login"]:checked').value;
+    document.getElementById('form-repartidor').style.display = modo === 'repartidor' ? 'block' : 'none';
+    document.getElementById('form-usuario').style.display = modo === 'usuario' ? 'block' : 'none';
+    document.getElementById('error-login').style.display = 'none';
+};
+
+// ============================================
+// LOGIN CON USUARIO/CONTRASEÑA
+// ============================================
+window.loginUsuario = () => {
+    const usuario = document.getElementById('input-usuario').value.trim().toLowerCase();
+    const contrasena = document.getElementById('input-contrasena').value;
+    const errorDiv = document.getElementById('error-login');
+    
+    const usuarios = [
+        { u: "admin", p: "moulin2024", nombre: "Administración", prefijo: "TODO" }, 
+        { u: "rosario", p: "moulinros", nombre: "Depósito Rosario", prefijo: "ROS" },
+        { u: "santafe", p: "moulinsfe", nombre: "Depósito Santa Fe", prefijo: "STAFE" },
+        { u: "recon", p: "moulinrec", nombre: "Depósito Reconquista", prefijo: "REC" },
+        { u: "bsas", p: "moulinbsas", nombre: "Depósito BSAS", prefijo: "BSAS" }
+    ];
+    
+    const encontrado = usuarios.find(x => x.u === usuario && x.p === contrasena);
+    
+    if (!encontrado) {
+        errorDiv.innerText = '❌ Usuario o contraseña incorrectos';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    window.sesionActual = {
+        nombre: encontrado.nombre,
+        prefijo: encontrado.prefijo,
+        rol: 'deposito'
+    };
+    sessionStorage.setItem('moulin_sesion', JSON.stringify(window.sesionActual));
+    
+    errorDiv.style.display = 'none';
+    mostrarPantallaPrincipal();
+};
 </script>
 
     <style>
