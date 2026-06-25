@@ -252,11 +252,43 @@
 <!-- ============================================ -->
 <main id="tab-ctacte" class="tab-content no-print">
     <div class="hoja">
-        <h3 style="color:var(--azul); border-bottom:2px solid var(--azul); padding-bottom:10px;">💰 CUENTA CORRIENTE DE CLIENTES</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--azul); padding-bottom:10px; margin-bottom:15px;">
+            <h3 style="margin:0; color:var(--azul);">💰 CUENTA CORRIENTE DE CLIENTES</h3>
+            <button onclick="toggleFormPago()" class="btn-nuevo-retiro" style="background:var(--verde);">💵 Registrar Pago</button>
+        </div>
+
+        <!-- FORMULARIO DE PAGO -->
+        <div id="form-pago-container" class="caja" style="display:none; border-left:5px solid var(--verde);">
+            <h4 style="margin-top:0;">Registrar Pago</h4>
+            <div class="grid-2">
+                <div>
+                    <label class="label-form">Cliente *</label>
+                    <input type="text" id="pago_cliente" list="lista_clientes_ctacte" placeholder="Nombre del cliente">
+                    <label class="label-form">Monto *</label>
+                    <input type="number" id="pago_monto" placeholder="0.00" step="0.01">
+                    <label class="label-form">Tipo de pago</label>
+                    <select id="pago_tipo">
+                        <option value="efectivo">Efectivo</option>
+                        <option value="cheque">Cheque</option>
+                        <option value="transferencia">Transferencia</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="label-form">Observaciones</label>
+                    <textarea id="pago_observaciones" rows="3" placeholder="Detalles adicionales..."></textarea>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button onclick="guardarPago()" style="background:var(--verde); color:white; border:none; padding:10px 25px; border-radius:5px; cursor:pointer; font-weight:bold;">💾 Guardar Pago</button>
+                <button onclick="toggleFormPago()" style="background:#ccc; color:#333; border:none; padding:10px 25px; border-radius:5px; cursor:pointer;">Cancelar</button>
+            </div>
+        </div>
+
+        <!-- LISTA DE CLIENTES CON DEUDA -->
         <div style="overflow-x:auto; margin-top:20px;">
             <table class="tabla-items">
                 <thead>
-                    <tr><th>Cliente</th><th>Localidad</th><th>Guías</th><th>Total Adeudado</th><th>Acción</th></tr>
+                    <tr><th>Cliente</th><th>Localidad</th><th>Último Cierre</th><th>Saldo Anterior</th><th>Saldo Actual</th><th>Acciones</th></tr>
                 </thead>
                 <tbody id="cuerpoTablaClientes"></tbody>
             </table>
@@ -264,20 +296,42 @@
     </div>
 </main>
 
-<footer class="footer-fijo no-print">
-    <div id="total_txt" style="font-size:24px; color:#48bb78;">TOTAL: $ 0.00</div>
-    <button id="btn-emitir" class="btn-emitir">GRABAR E IMPRIMIR</button>
-</footer>
+<!-- MODAL DETALLE CLIENTE -->
+<div id="modal-detalle-cliente" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; overflow-y:auto;">
+    <div style="background:white; max-width:900px; margin:50px auto; padding:20px; border-radius:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--azul); padding-bottom:10px; margin-bottom:15px;">
+            <h3 id="detalle-cliente-titulo" style="margin:0; color:var(--azul);"></h3>
+            <button onclick="cerrarModalDetalle()" style="background:var(--rojo); color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">✕ Cerrar</button>
+        </div>
+        <div id="detalle-cliente-contenido"></div>
+    </div>
+</div>
 
-<div id="seccion-impresion"></div>
+<!-- MODAL EXPORTAR -->
+<div id="modal-exportar" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000;">
+    <div style="background:white; max-width:500px; margin:150px auto; padding:20px; border-radius:8px;">
+        <h3 style="margin-top:0; color:var(--azul);">📊 Exportar Cuenta Corriente</h3>
+        <div id="exportar-cliente-nombre" style="font-weight:bold; margin-bottom:15px;"></div>
+        
+        <label style="display:block; margin-bottom:10px;">
+            <input type="radio" name="tipo-exportar" value="actual" checked> Período actual (desde último cierre)
+        </label>
+        <label style="display:block; margin-bottom:10px;">
+            <input type="radio" name="tipo-exportar" value="historico"> Histórico completo
+        </label>
+        <label style="display:block; margin-bottom:10px;">
+            <input type="radio" name="tipo-exportar" value="personalizado"> Personalizado:
+        </label>
+        <div id="fechas-personalizadas" style="display:none; margin-left:20px; margin-bottom:15px;">
+            <label>Desde: <input type="date" id="export-desde"></label>
+            <label style="margin-left:10px;">Hasta: <input type="date" id="export-hasta"></label>
+        </div>
+        
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button onclick="ejecutarExportar()" style="background:var(--verde); color:white; border:none; padding:10px 25px; border-radius:5px; cursor:pointer; font-weight:bold;">📊 Exportar</button>
+            <button onclick="cerrarModalExportar()" style="background:#ccc; color:#333; border:none; padding:10px 25px; border-radius:5px; cursor:pointer;">Cancelar</button>
+        </div>
+    </div>
+</div>
 
-<datalist id="lista_localidades_retiro">
-    <option value="RECONQUISTA">
-    <option value="ROSARIO">
-    <option value="SANTA FE">
-    <option value="BUENOS AIRES">
-</datalist>
-
-<script type="module" src="app-main.js"></script>
-</body>
-</html>
+<datalist id="lista_clientes_ctacte"></datalist>
