@@ -28,93 +28,53 @@
     window.filtroEstadoActual = 'todos';
     window.sesionActual = null;
 
-    // ============================================
-    // LOGIN
-    // ============================================
-    
-    onValue(ref(db, 'moulin/repartidores'), (snapshot) => {
-        const data = snapshot.val();
-        if (!data) return;
+    <!-- ============================================ -->
+<!-- PANTALLA DE LOGIN -->
+<!-- ============================================ -->
+<div id="pantalla-login">
+    <div class="login-card-movil">
+        <h2>🚚 MOULIN MÓVIL</h2>
+        <div class="subtitulo">Sistema de entregas y retiros</div>
         
-        const repartidores = Object.entries(data)
-            .map(([id, val]) => ({ ...val, firebaseID: id }))
-            .filter(r => r.activo !== false && !r.eliminado)
-            .sort((a, b) => a.nombre.localeCompare(b.nombre));
+        <!-- Selector de modo -->
+        <div style="margin-bottom:20px;">
+            <label style="display:block; margin-bottom:10px;">
+                <input type="radio" name="modo-login" value="repartidor" checked onchange="cambiarModoLogin()"> 
+                <b>🏍️ Repartidor</b> (con PIN)
+            </label>
+            <label style="display:block;">
+                <input type="radio" name="modo-login" value="usuario" onchange="cambiarModoLogin()"> 
+                <b>🏢 Usuario del sistema</b> (usuario/contraseña)
+            </label>
+        </div>
         
-        const select = document.getElementById('select-repartidor');
-        if (!select) return;
+        <!-- Formulario para REPARTIDOR -->
+        <div id="form-repartidor">
+            <label>Seleccioná tu nombre:</label>
+            <select id="select-repartidor">
+                <option value="">-- Cargando repartidores... --</option>
+            </select>
+            
+            <label>PIN de acceso:</label>
+            <input type="password" id="input-pin" maxlength="4" inputmode="numeric" placeholder="••••">
+            
+            <button class="btn-login" onclick="loginRepartidor()">🏍️ INGRESAR</button>
+        </div>
         
-        select.innerHTML = '<option value="">-- Seleccioná tu nombre --</option>';
+        <!-- Formulario para USUARIO -->
+        <div id="form-usuario" style="display:none;">
+            <label>Usuario:</label>
+            <input type="text" id="input-usuario" placeholder="ej: admin, rosario, recon">
+            
+            <label>Contraseña:</label>
+            <input type="password" id="input-contrasena" placeholder="Contraseña">
+            
+            <button class="btn-login" onclick="loginUsuario()">🏢 INGRESAR</button>
+        </div>
         
-        repartidores.forEach(r => {
-            const opt = document.createElement('option');
-            opt.value = r.firebaseID;
-            opt.textContent = `${r.nombre} (${r.sucursal})`;
-            opt.dataset.pin = r.pin || '';
-            opt.dataset.sucursal = r.sucursal || '';
-            opt.dataset.nombre = r.nombre || '';
-            select.appendChild(opt);
-        });
-    });
-
-    window.loginRepartidor = () => {
-        const select = document.getElementById('select-repartidor');
-        const pin = document.getElementById('input-pin').value.trim();
-        const errorDiv = document.getElementById('error-login');
-        
-        if (!select.value) {
-            errorDiv.innerText = '⚠️ Seleccioná tu nombre';
-            errorDiv.style.display = 'block';
-            return;
-        }
-        
-        const selected = select.options[select.selectedIndex];
-        
-        if (pin !== selected.dataset.pin) {
-            errorDiv.innerText = '❌ PIN incorrecto';
-            errorDiv.style.display = 'block';
-            return;
-        }
-        
-        window.sesionActual = {
-            nombre: selected.dataset.nombre,
-            prefijo: selected.dataset.sucursal,
-            rol: 'repartidor',
-            repartidorID: select.value
-        };
-        sessionStorage.setItem('moulin_sesion', JSON.stringify(window.sesionActual));
-        
-        errorDiv.style.display = 'none';
-        mostrarPantallaPrincipal();
-    };
-
-    window.loginDeposito = () => {
-        const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
-        if (!sesion || !sesion.prefijo) {
-            alert('⚠️ Debés iniciar sesión primero en el sistema principal (index.html)');
-            return;
-        }
-        
-        window.sesionActual = {
-            ...sesion,
-            rol: 'deposito'
-        };
-        sessionStorage.setItem('moulin_sesion', JSON.stringify(window.sesionActual));
-        
-        mostrarPantallaPrincipal();
-    };
-
-    function mostrarPantallaPrincipal() {
-        document.getElementById('pantalla-login').style.display = 'none';
-        document.getElementById('pantalla-principal').style.display = 'block';
-        
-        const sesion = window.sesionActual;
-        document.getElementById('user-info').innerText = 
-            `${sesion.rol === 'repartidor' ? '🏍️ Repartidor' : '🏢 Depósito'}: ${sesion.nombre}`;
-        document.getElementById('prefijo-badge').innerText = sesion.prefijo;
-        
-        inicializarListeners();
-    }
+        <div id="error-login" class="error"></div>
+    </div>
+</div>
 
     // ============================================
     // LISTENERS
