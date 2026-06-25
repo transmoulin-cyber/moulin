@@ -708,51 +708,355 @@ window.exportarRetirosExcel = () => {
 // ============================================
 // CUENTA CORRIENTE
 // ============================================
+window.pagosGlobal = [];
+window.cierresGlobal = [];
+
+// Listener de pagos
+onValue(ref(db, 'moulin/pagos'), (snapshot) => {
+    const data = snapshot.val();
+    window.pagosGlobal = data ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })) : [];
+    renderTablaClientes();
+});
+
+// Listener de cierres
+onValue(ref(db, 'moulin/cierres'), (snapshot) => {
+    const data = snapshot.val();
+    window.cierresGlobal = data ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })) : [];
+    renderTablaClientes();
+});
+
 function renderTablaClientes() {
     const tbody = document.getElementById('cuerpoTablaClientes');
     if (!tbody) return;
 
-    const deudaPorCliente = {};
+    // Actualizar datalist
+    const datalist = document.getElementById('lista_clientes_ctacte');
+    if (datalist) {
+        const clientesUnicos = [...new Set(window.historialGlobal.filter(g => g.condicion === 'CTA CTE').map(g => g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n))];
+        datalist.innerHTML = clientesUnicos.map(c => `<option value="${c}">`).join('');
+    }
+
+    // Calcular datos por cliente
+    const datosPorCliente = {};
+    
     window.historialGlobal.forEach(g => {
-        if (g.condicion === 'CTA CTE') {
-            const cliente = g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n;
-            if (!deudaPorCliente[cliente]) {
-                deudaPorCliente[cliente] = { guias: 0, total: 0, localidad: g.r_l || g.d_l || '' };
-            }
-            deudaPorCliente[cliente].guias++;
-            deudaPorCliente[cliente].total += Number(g.total || 0);
+        if (g.condicion !== 'CTA CTE') return;
+        const cliente = g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n;
+        if (!datosPorCliente[cliente]) {
+            datosPorCliente[cliente] = { guias: [], localidad: g.r_l || g.d_l || '' };
         }
+        datosPorCliente[cliente].guias.push(g);
     });
 
-    const clientesConDeuda = Object.entries(deudaPorCliente)
-        .map(([nombre, data]) => ({ nombre, ...data }))
-        .sort((a, b) => b.total - a.total);
+    const clientesConDatos = Object.entries(datosPorCliente).map(([nombre, data]) => {
+        // Buscar último cierre
+        const cierresCliente = window.cierresGlobal
+            .filter(c => c.cliente === nombre)
+            .sort((a, b) => b.timestamp - a.timestamp);
+        const ultimoCierre = cierresCliente[0];
+        
+        // Calcular saldo anterior
+        const saldoAnterior = ultimoCierre ? ultimoCierre.saldoFinal : 0;
+        
+        // Calcular guías desde último cierre
+        const fechaCierre = ultimoCierre ? ultimoCierre.timestamp : 0;
+        const guiasDesdeCierre = data.guias.filter(g => g.timestamp > fechaCierre);
+        const totalGuias = guiasDesdeCierre.reduce((sum, g) => sum + Number(g.total || 0), 0);
+        
+        // Calcular pagos desde último cierre
+        const pagosCliente = window.pagosGlobal.filter(p => p.cliente === nombre && p.timestamp > fechaCierre);
+        const totalPagos = pagosCliente.reduce((sum, p) => sum + Number(p.monto || 0), 0);
+        
+        const saldoActual = saldoAnterior + totalGuias - totalPagos;
+        
+        return {
+            nombre,
+            localidad: data.localidad,
+            ultimoCierre: ultimoCierre ? ultimoCierre.fechaCierre : 'Nunca',
+            saldoAnterior,
+            saldoActual,
+            timestampCierre: fechaCierre
+        };
+    }).sort((a, b) => b.saldoActual - a.saldoActual);
 
-    tbody.innerHTML = clientesConDeuda.slice(0, 50).map(c => `
+    tbody.innerHTML = clientesConDatos.map(c => `
         <tr>
             <td><b>${c.nombre}</b></td>
             <td>${c.localidad}</td>
-            <td>${c.guias}</td>
-            <td style="color:var(--rojo); font-weight:bold;">$${c.total.toLocaleString('es-AR')}</td>
-            <td><button onclick="verDetalleCliente('${c.nombre}')" style="background:var(--azul); color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Ver Detalle</button></td>
+            <td>${c.ultimoCierre}</td>
+            <td>$${c.saldoAnterior.toLocaleString('es-AR')}</td>
+            <td class="${c.saldoActual > 0 ? 'saldo-positivo' : 'saldo-cero'}">$${c.saldoActual.toLocaleString('es-AR')}</td>
+            <td>
+                <button onclick="verDetalleCliente('${c.nombre}')" style="background:var(--azul); color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-right:5px;">👁️ Ver</button>
+                <button onclick="abrirModalExportar('${c.nombre}')" style="background:var(--verde); color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-right:5px;">📊</button>
+                <button onclick="cerrarPeriodo('${c.nombre}')" style="background:var(--rojo); color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">🔒</button>
+            </td>
         </tr>`).join('');
 }
 
-window.verDetalleCliente = (nombre) => {
-    const guiasCliente = window.historialGlobal.filter(g =>
-        g.condicion === 'CTA CTE' && (g.r_n === nombre || g.d_n === nombre)
-    );
-    let html = `<h3>Cuenta Corriente: ${nombre}</h3>
-        <table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#1a4a7a;color:white;">
-        <th style="padding:8px;">Guía</th><th style="padding:8px;">Fecha</th><th style="padding:8px;">Ruta</th><th style="padding:8px;">Total</th><th style="padding:8px;">Estado</th></tr></thead><tbody>`;
-    guiasCliente.forEach(g => {
-        html += `<tr><td style="padding:6px;border-bottom:1px solid #eee;">${g.num}</td><td style="padding:6px;border-bottom:1px solid #eee;">${g.fecha}</td><td style="padding:6px;border-bottom:1px solid #eee;">${g.r_l} → ${g.d_l}</td><td style="padding:6px;border-bottom:1px solid #eee;">$${Number(g.total).toLocaleString('es-AR')}</td><td style="padding:6px;border-bottom:1px solid #eee;">${g.estado}</td></tr>`;
-    });
-    html += '</tbody></table>';
-    const win = window.open('', '_blank');
-    win.document.write(`<html><head><style>body{font-family:Arial;padding:20px;}</style></head><body>${html}</body></html>`);
-    win.document.close();
+window.toggleFormPago = function () {
+    const form = document.getElementById('form-pago-container');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'none') {
+        ['pago_cliente', 'pago_monto', 'pago_observaciones'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+    }
 };
+
+window.guardarPago = async function () {
+    const cliente = document.getElementById('pago_cliente').value.trim();
+    const monto = parseFloat(document.getElementById('pago_monto').value);
+    
+    if (!cliente) return alert("⚠️ Ingresá el nombre del cliente.");
+    if (!monto || monto <= 0) return alert("⚠️ Ingresá un monto válido.");
+    
+    const pago = {
+        cliente,
+        sucursal: NOMBRE_SUCURSAL,
+        monto,
+        tipo: document.getElementById('pago_tipo').value,
+        observaciones: document.getElementById('pago_observaciones').value.trim(),
+        fecha: new Date().toLocaleDateString('es-AR'),
+        timestamp: Date.now(),
+        registradoPor: NOMBRE_OP
+    };
+    
+    try {
+        await set(ref(db, `moulin/pagos/${Date.now()}`), pago);
+        toggleFormPago();
+        alert("✅ Pago registrado correctamente.");
+    } catch (e) {
+        alert("❌ Error al guardar: " + e.message);
+    }
+};
+
+window.verDetalleCliente = (nombre) => {
+    const modal = document.getElementById('modal-detalle-cliente');
+    const titulo = document.getElementById('detalle-cliente-titulo');
+    const contenido = document.getElementById('detalle-cliente-contenido');
+    
+    titulo.innerText = `💰 Cuenta Corriente: ${nombre}`;
+    
+    // Buscar último cierre
+    const cierresCliente = window.cierresGlobal
+        .filter(c => c.cliente === nombre)
+        .sort((a, b) => b.timestamp - a.timestamp);
+    const ultimoCierre = cierresCliente[0];
+    const fechaCierre = ultimoCierre ? ultimoCierre.timestamp : 0;
+    const saldoAnterior = ultimoCierre ? ultimoCierre.saldoFinal : 0;
+    
+    // Guías desde último cierre
+    const guiasCliente = window.historialGlobal.filter(g => {
+        if (g.condicion !== 'CTA CTE') return false;
+        const clienteGuia = g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n;
+        return clienteGuia === nombre && g.timestamp > fechaCierre;
+    });
+    
+    // Pagos desde último cierre
+    const pagosCliente = window.pagosGlobal.filter(p => p.cliente === nombre && p.timestamp > fechaCierre);
+    
+    const totalGuias = guiasCliente.reduce((sum, g) => sum + Number(g.total || 0), 0);
+    const totalPagos = pagosCliente.reduce((sum, p) => sum + Number(p.monto || 0), 0);
+    const saldoActual = saldoAnterior + totalGuias - totalPagos;
+    
+    let html = `
+        <div class="caja" style="background:#e3f2fd; border-left:4px solid var(--azul); padding:10px 15px; margin-bottom:15px;">
+            <b>Último cierre:</b> ${ultimoCierre ? ultimoCierre.fechaCierre : 'Nunca'}<br>
+            <b>Saldo anterior:</b> $${saldoAnterior.toLocaleString('es-AR')}
+        </div>
+        
+        <h4 style="color:var(--azul);">📄 Guías desde último cierre (${guiasCliente.length})</h4>
+        <table class="tabla-items">
+            <thead><tr><th>Guía</th><th>Fecha</th><th>Ruta</th><th>Total</th></tr></thead>
+            <tbody>
+                ${guiasCliente.map(g => `
+                    <tr>
+                        <td>${g.num}</td>
+                        <td>${g.fecha}</td>
+                        <td>${g.r_l} → ${g.d_l}</td>
+                        <td>$${Number(g.total).toLocaleString('es-AR')}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        <div style="text-align:right; font-weight:bold; margin-top:5px;">Subtotal: $${totalGuias.toLocaleString('es-AR')}</div>
+        
+        <h4 style="color:var(--verde); margin-top:20px;">💵 Pagos desde último cierre (${pagosCliente.length})</h4>
+        <table class="tabla-items">
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Observaciones</th></tr></thead>
+            <tbody>
+                ${pagosCliente.map(p => `
+                    <tr>
+                        <td>${p.fecha}</td>
+                        <td>${p.tipo}</td>
+                        <td>$${Number(p.monto).toLocaleString('es-AR')}</td>
+                        <td>${p.observaciones || '-'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        <div style="text-align:right; font-weight:bold; margin-top:5px;">Subtotal: $${totalPagos.toLocaleString('es-AR')}</div>
+        
+        <div class="caja" style="background:#fff3cd; border-left:4px solid var(--naranja); padding:15px; margin-top:20px; text-align:center;">
+            <div style="font-size:14px; color:#666;">Saldo anterior + Guías - Pagos</div>
+            <div style="font-size:32px; font-weight:bold; color:${saldoActual > 0 ? 'var(--rojo)' : 'var(--verde)'};">
+                $${saldoActual.toLocaleString('es-AR')}
+            </div>
+        </div>
+    `;
+    
+    contenido.innerHTML = html;
+    modal.style.display = 'block';
+};
+
+window.cerrarModalDetalle = () => {
+    document.getElementById('modal-detalle-cliente').style.display = 'none';
+};
+
+window.cerrarPeriodo = async (nombre) => {
+    // Calcular saldo actual
+    const cierresCliente = window.cierresGlobal
+        .filter(c => c.cliente === nombre)
+        .sort((a, b) => b.timestamp - a.timestamp);
+    const ultimoCierre = cierresCliente[0];
+    const fechaCierre = ultimoCierre ? ultimoCierre.timestamp : 0;
+    const saldoAnterior = ultimoCierre ? ultimoCierre.saldoFinal : 0;
+    
+    const guiasCliente = window.historialGlobal.filter(g => {
+        if (g.condicion !== 'CTA CTE') return false;
+        const clienteGuia = g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n;
+        return clienteGuia === nombre && g.timestamp > fechaCierre;
+    });
+    const totalGuias = guiasCliente.reduce((sum, g) => sum + Number(g.total || 0), 0);
+    
+    const pagosCliente = window.pagosGlobal.filter(p => p.cliente === nombre && p.timestamp > fechaCierre);
+    const totalPagos = pagosCliente.reduce((sum, p) => sum + Number(p.monto || 0), 0);
+    
+    const saldoActual = saldoAnterior + totalGuias - totalPagos;
+    
+    if (!confirm(`¿Cerrar período para ${nombre}?\n\nSaldo actual: $${saldoActual.toLocaleString('es-AR')}\n\nEsto guardará el saldo actual como "saldo anterior" y la cuenta arrancará en $0.`)) return;
+    
+    try {
+        await set(ref(db, `moulin/cierres/${Date.now()}`), {
+            cliente: nombre,
+            sucursal: NOMBRE_SUCURSAL,
+            fechaCierre: new Date().toLocaleDateString('es-AR'),
+            timestamp: Date.now(),
+            cerradoPor: NOMBRE_OP,
+            saldoFinal: saldoActual
+        });
+        alert("✅ Período cerrado correctamente.");
+    } catch (e) {
+        alert("❌ Error al cerrar: " + e.message);
+    }
+};
+
+window.abrirModalExportar = (nombre) => {
+    const modal = document.getElementById('modal-exportar');
+    document.getElementById('exportar-cliente-nombre').innerText = `Cliente: ${nombre}`;
+    modal.dataset.cliente = nombre;
+    modal.style.display = 'block';
+    
+    // Mostrar/ocultar fechas personalizadas
+    document.querySelectorAll('input[name="tipo-exportar"]').forEach(radio => {
+        radio.onchange = () => {
+            document.getElementById('fechas-personalizadas').style.display = 
+                radio.value === 'personalizado' && radio.checked ? 'block' : 'none';
+        };
+    });
+};
+
+window.cerrarModalExportar = () => {
+    document.getElementById('modal-exportar').style.display = 'none';
+};
+
+window.ejecutarExportar = () => {
+    const modal = document.getElementById('modal-exportar');
+    const nombre = modal.dataset.cliente;
+    const tipo = document.querySelector('input[name="tipo-exportar"]:checked').value;
+    
+    let fechaDesde = 0;
+    let fechaHasta = Date.now();
+    
+    if (tipo === 'actual') {
+        const cierresCliente = window.cierresGlobal
+            .filter(c => c.cliente === nombre)
+            .sort((a, b) => b.timestamp - a.timestamp);
+        fechaDesde = cierresCliente[0]?.timestamp || 0;
+    } else if (tipo === 'personalizado') {
+        const desde = document.getElementById('export-desde').value;
+        const hasta = document.getElementById('export-hasta').value;
+        if (!desde || !hasta) return alert("⚠️ Ingresá las fechas.");
+        
+        fechaDesde = new Date(desde).getTime();
+        fechaHasta = new Date(hasta).getTime() + 86400000; // +1 día
+    }
+    
+    // Filtrar guías y pagos
+    const guias = window.historialGlobal.filter(g => {
+        if (g.condicion !== 'CTA CTE') return false;
+        const clienteGuia = g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n;
+        return clienteGuia === nombre && g.timestamp >= fechaDesde && g.timestamp <= fechaHasta;
+    });
+    
+    const pagos = window.pagosGlobal.filter(p => 
+        p.cliente === nombre && p.timestamp >= fechaDesde && p.timestamp <= fechaHasta
+    );
+    
+    // Calcular saldo anterior
+    const cierresCliente = window.cierresGlobal
+        .filter(c => c.cliente === nombre && c.timestamp < fechaDesde)
+        .sort((a, b) => b.timestamp - a.timestamp);
+    const saldoAnterior = cierresCliente[0]?.saldoFinal || 0;
+    
+    // Crear Excel
+    const data = [];
+    
+    // Encabezado
+    data.push({ Concepto: 'SALDO ANTERIOR', Detalle: '', Monto: saldoAnterior });
+    data.push({ Concepto: '', Detalle: '', Monto: '' });
+    
+    // Guías
+    data.push({ Concepto: 'GUÍAS', Detalle: '', Monto: '' });
+    guias.forEach(g => {
+        data.push({
+            Concepto: 'Guía',
+            Detalle: `${g.num} - ${g.fecha} - ${g.r_l} → ${g.d_l}`,
+            Monto: Number(g.total)
+        });
+    });
+    data.push({ Concepto: '', Detalle: '', Monto: '' });
+    
+    // Pagos
+    data.push({ Concepto: 'PAGOS', Detalle: '', Monto: '' });
+    pagos.forEach(p => {
+        data.push({
+            Concepto: 'Pago',
+            Detalle: `${p.fecha} - ${p.tipo} - ${p.observaciones || ''}`,
+            Monto: -Number(p.monto)
+        });
+    });
+    data.push({ Concepto: '', Detalle: '', Monto: '' });
+    
+    // Saldo final
+    const totalGuias = guias.reduce((sum, g) => sum + Number(g.total || 0), 0);
+    const totalPagos = pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0);
+    const saldoFinal = saldoAnterior + totalGuias - totalPagos;
+    data.push({ Concepto: 'SALDO ACTUAL', Detalle: '', Monto: saldoFinal });
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{wch:20}, {wch:50}, {wch:15}];
+    XLSX.utils.book_append_sheet(wb, ws, "Cuenta Corriente");
+    
+    const fecha = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `CC_${nombre.replace(/\s+/g, '_')}_${fecha}.xlsx`);
+    
+    cerrarModalExportar();
+};
+
 // ============================================
 // REPARTIDORES
 // ============================================
