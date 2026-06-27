@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MOULIN MÓVIL V8.9</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     
     <style>
         body { font-family: sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
@@ -92,8 +93,144 @@
         .en_reparto { background: #e9d8fd; color: #6b46c1; }
         .entregado { background: #f0fff4; color: #38a169; border: 1px solid #38a169; }
         .btn-qr { background:#1a4a7a; color:white; border:none; padding:10px 15px; border-radius:5px; font-weight:bold; }
+        
+        /* BOTÓN ESCANEAR */
+        .btn-escanear {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #38a169, #2f855a);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 10px rgba(56, 161, 105, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn-escanear:active {
+            transform: scale(0.98);
+        }
+        .busqueda-manual {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        .busqueda-manual input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #1a4a7a;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .busqueda-manual button {
+            padding: 10px 15px;
+            background: #1a4a7a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .separador {
+            text-align: center;
+            color: #999;
+            font-size: 11px;
+            margin: 5px 0;
+            position: relative;
+        }
+        .separador::before,
+        .separador::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 35%;
+            height: 1px;
+            background: #ddd;
+        }
+        .separador::before { left: 0; }
+        .separador::after { right: 0; }
+        
+        /* MODALES */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        #reader {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #reader video {
+            border-radius: 8px;
+        }
+        .modal-titulo {
+            margin: 0 0 15px 0;
+            color: #1a4a7a;
+            text-align: center;
+        }
+        .modal-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .modal-btn-verde { background: #38a169; color: white; }
+        .modal-btn-rojo { background: #e53e3e; color: white; }
+        .modal-btn-azul { background: #1a4a7a; color: white; }
+        .modal-btn-gris { background: #ccc; color: #333; }
+        .modal-btn-naranja { background: #dd6b20; color: white; }
+        
+        .resultado-info {
+            background: #f7fafc;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .resultado-info b { color: #1a4a7a; }
+        .resultado-numero {
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            color: #1a4a7a;
+            margin: 10px 0;
+        }
+        .resultado-icono {
+            text-align: center;
+            font-size: 48px;
+            margin: 10px 0;
+        }
+        
         #modalQR { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9); display:none; flex-direction:column; align-items:center; justify-content:center; z-index: 2000; }
-        .modal-content { background: white; padding: 20px; border-radius: 10px; text-align: center; }
+        #modalQR .modal-content { background: white; padding: 20px; border-radius: 10px; text-align: center; }
     </style>
 </head>
 <body>
@@ -121,7 +258,7 @@
 </div>
 
 <!-- ============================================ -->
-<!-- PANTALLA PRINCIPAL (oculta hasta login) -->
+<!-- PANTALLA PRINCIPAL -->
 <!-- ============================================ -->
 <div id="pantalla-principal" style="display:none;">
 
@@ -136,13 +273,23 @@
     <small id="user-info">Cargando...</small>
 </div>
 
+<!-- BOTÓN ESCANEAR + BÚSQUEDA MANUAL -->
+<button class="btn-escanear" onclick="iniciarEscaneo()">📷 ESCANEAR CÓDIGO QR</button>
+
+<div class="separador">o ingresá el número manualmente</div>
+
+<div class="busqueda-manual">
+    <input type="text" id="input-buscar-numero" placeholder="Ej: RECON-00123 o RT-REC-00045" onkeypress="if(event.key==='Enter') buscarPorNumeroManual()">
+    <button onclick="buscarPorNumeroManual()">🔍</button>
+</div>
+
 <div class="search-box">
-    <input type="text" id="search" placeholder="Buscar cliente o remito..." oninput="renderizarLista()">
+    <input type="text" id="search" placeholder="🔎 Buscar en la lista..." oninput="renderizarLista()">
 </div>
 
 <div class="filtros-container">
     <button id="btn-todos" class="btn-filtro active" onclick="cambiarFiltro('todos')">VER TODOS</button>
-    <button id="btn-pendientes" class="btn-filtro" onclick="cambiarFiltro('pendientes')">ENTREGAS</button>
+    <button id="btn-pendientes" class="btn-filtro" onclick="cambiarFiltro('pendientes')">PENDIENTES</button>
 </div>
 
 <div id="lista">
@@ -151,6 +298,29 @@
 
 </div>
 
+<!-- ============================================ -->
+<!-- MODAL ESCÁNER -->
+<!-- ============================================ -->
+<div id="modal-escaner" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="modal-titulo">📷 Escaneando...</h3>
+        <div id="reader"></div>
+        <button class="modal-btn modal-btn-rojo" onclick="detenerEscaneo()">❌ CANCELAR</button>
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- MODAL RESULTADO -->
+<!-- ============================================ -->
+<div id="modal-resultado" class="modal-overlay">
+    <div class="modal-content" id="resultado-contenido">
+        <!-- Se llena dinámicamente -->
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- MODAL QR (ver QR de una guía) -->
+<!-- ============================================ -->
 <div id="modalQR">
     <div class="modal-content">
         <h3 id="qrTitle" style="margin-top:0; color:#1a4a7a;"></h3>
@@ -178,8 +348,11 @@
     
     window.historial = [];
     window.retiros = [];
+    window.historialCompleto = []; // Todas las guías (para búsqueda por número)
+    window.retirosCompleto = [];   // Todos los retiros (para búsqueda por número)
     window.filtroEstadoActual = 'todos';
     window.sesionActual = null;
+    window.html5QrcodeScanner = null;
 
     // ============================================
     // VERIFICAR SESIÓN AL CARGAR
@@ -300,7 +473,11 @@
             const data = snapshot.val();
             let listaCompleta = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})) : [];
             listaCompleta.sort((a,b) => b.firebaseID - a.firebaseID);
+            
+            // Guardar TODAS las guías para búsqueda
+            window.historialCompleto = listaCompleta;
 
+            // Filtrar solo las asignadas al repartidor para la lista
             window.historial = listaCompleta.filter(g => g.asignado_a === sesion.nombre);
             renderizarLista();
         });
@@ -311,12 +488,341 @@
             let retirosCompleta = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})) : [];
             retirosCompleta.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
             
+            // Guardar TODOS los retiros para búsqueda
+            window.retirosCompleto = retirosCompleta;
+            
+            // Filtrar solo los asignados al repartidor para la lista
             window.retiros = retirosCompleta.filter(r => 
                 r.asignado_a === sesion.nombre && r.estado === 'pendiente'
             );
             renderizarLista();
         });
     }
+
+    // ============================================
+    // ESCÁNER QR (FASE 3)
+    // ============================================
+    window.iniciarEscaneo = async () => {
+        const modal = document.getElementById('modal-escaner');
+        modal.style.display = 'flex';
+        
+        try {
+            window.html5QrcodeScanner = new Html5Qrcode("reader");
+            
+            await window.html5QrcodeScanner.start(
+                { facingMode: "environment" }, // Cámara trasera
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 }
+                },
+                (decodedText) => {
+                    // Éxito: se leyó un código
+                    detenerEscaneo();
+                    procesarNumeroEscaneado(decodedText);
+                },
+                (errorMessage) => {
+                    // Error de lectura (normal mientras escanea)
+                }
+            );
+        } catch (err) {
+            alert("❌ No se pudo acceder a la cámara: " + err);
+            modal.style.display = 'none';
+        }
+    };
+
+    window.detenerEscaneo = async () => {
+        if (window.html5QrcodeScanner) {
+            try {
+                await window.html5QrcodeScanner.stop();
+                window.html5QrcodeScanner.clear();
+            } catch (e) {
+                // Ignorar errores al detener
+            }
+            window.html5QrcodeScanner = null;
+        }
+        document.getElementById('modal-escaner').style.display = 'none';
+    };
+
+    window.buscarPorNumeroManual = () => {
+        const input = document.getElementById('input-buscar-numero');
+        const numero = input.value.trim().toUpperCase();
+        if (!numero) {
+            alert("⚠️ Ingresá un número de guía o retiro");
+            return;
+        }
+        input.value = '';
+        procesarNumeroEscaneado(numero);
+    };
+
+    function procesarNumeroEscaneado(numero) {
+        // Normalizar el número (quitar espacios)
+        numero = numero.trim().toUpperCase();
+        
+        // Buscar en guías
+        const guia = window.historialCompleto.find(g => 
+            (g.num || '').toUpperCase() === numero
+        );
+        
+        if (guia) {
+            mostrarResultadoGuia(guia);
+            return;
+        }
+        
+        // Buscar en retiros
+        const retiro = window.retirosCompleto.find(r => 
+            (r.num_retiro || '').toUpperCase() === numero
+        );
+        
+        if (retiro) {
+            mostrarResultadoRetiro(retiro);
+            return;
+        }
+        
+        // No encontrado
+        mostrarResultadoNoEncontrado(numero);
+    }
+
+    function mostrarResultadoGuia(g) {
+        const sesion = window.sesionActual;
+        const esMia = g.asignado_a === sesion.nombre;
+        const sinAsignar = !g.asignado_a;
+        const entregada = g.estado === 'entregado';
+        
+        let html = '';
+        
+        if (entregada) {
+            // Ya fue entregada
+            html = `
+                <div class="resultado-icono">✅</div>
+                <h3 class="modal-titulo">Guía ya entregada</h3>
+                <div class="resultado-numero">${g.num}</div>
+                <div class="resultado-info">
+                    <b>Cliente:</b> ${g.d_n}<br>
+                    <b>Destino:</b> ${g.d_l}<br>
+                    <b>Dirección:</b> ${g.d_d || 'No especificada'}<br>
+                    <b>Estado:</b> <span style="color:#38a169; font-weight:bold;">ENTREGADA</span>
+                    ${g.asignado_a ? `<br><b>Repartidor:</b> ${g.asignado_a}` : ''}
+                </div>
+                <button class="modal-btn modal-btn-gris" onclick="cerrarResultado()">CERRAR</button>
+            `;
+        } else if (esMia) {
+            // Es mía, puedo entregarla
+            html = `
+                <div class="resultado-icono">📦</div>
+                <h3 class="modal-titulo">✅ Mi guía</h3>
+                <div class="resultado-numero">${g.num}</div>
+                <div class="resultado-info">
+                    <b>Cliente:</b> ${g.d_n}<br>
+                    <b>Destino:</b> ${g.d_l}<br>
+                    <b>Dirección:</b> ${g.d_d || 'No especificada'}<br>
+                    <b>Tel:</b> ${g.d_t || '---'}<br>
+                    <b>Bultos:</b> ${g.cant_t} | <b>Total:</b> $${Number(g.total).toLocaleString('es-AR')}<br>
+                    <b>Estado:</b> ${(g.estado || 'recibido').toUpperCase()}
+                </div>
+                <button class="modal-btn modal-btn-azul" onclick="abrirMapa('${(g.d_d || '').replace(/'/g, "\\'")}', '${(g.d_l || '').replace(/'/g, "\\'")}')">📍 IR CON MAPS</button>
+                <button class="modal-btn modal-btn-verde" onclick="marcarEntregadoDesdeScanner('${g.firebaseID}')">✅ MARCAR ENTREGADO</button>
+                <button class="modal-btn modal-btn-gris" onclick="cerrarResultado()">CERRAR</button>
+            `;
+        } else if (sinAsignar) {
+            // No está asignada, puedo auto-asignarla
+            html = `
+                <div class="resultado-icono">⚠️</div>
+                <h3 class="modal-titulo">Guía sin asignar</h3>
+                <div class="resultado-numero">${g.num}</div>
+                <div class="resultado-info">
+                    <b>Cliente:</b> ${g.d_n}<br>
+                    <b>Destino:</b> ${g.d_l}<br>
+                    <b>Dirección:</b> ${g.d_d || 'No especificada'}<br>
+                    <b>Tel:</b> ${g.d_t || '---'}<br>
+                    <b>Bultos:</b> ${g.cant_t} | <b>Total:</b> $${Number(g.total).toLocaleString('es-AR')}<br>
+                    <b>Estado:</b> <span style="color:#dd6b20;">SIN ASIGNAR</span>
+                </div>
+                <p style="text-align:center; color:#666; font-size:13px; margin:10px 0;">
+                    ¿Querés asignártela y ponerla en reparto?
+                </p>
+                <button class="modal-btn modal-btn-naranja" onclick="autoAsignarGuia('${g.firebaseID}')">✅ SÍ, ASIGNÁRME LA Y LLEVARLA</button>
+                <button class="modal-btn modal-btn-gris" onclick="cerrarResultado()">NO, CERRAR</button>
+            `;
+        } else {
+            // Está asignada a otro
+            html = `
+                <div class="resultado-icono">🚫</div>
+                <h3 class="modal-titulo">Guía de otro repartidor</h3>
+                <div class="resultado-numero">${g.num}</div>
+                <div class="resultado-info">
+                    <b>Cliente:</b> ${g.d_n}<br>
+                    <b>Destino:</b> ${g.d_l}<br>
+                    <b>Asignada a:</b> <span style="color:#e53e3e; font-weight:bold;">${g.asignado_a}</span><br>
+                    <b>Estado:</b> ${(g.estado || 'recibido').toUpperCase()}
+                </div>
+                <p style="text-align:center; color:#666; font-size:13px; margin:10px 0;">
+                    Esta guía no es tuya. Contactá al depósito si hay un error.
+                </p>
+                <button class="modal-btn modal-btn-gris" onclick="cerrarResultado()">CERRAR</button>
+            `;
+        }
+        
+        document.getElementById('resultado-contenido').innerHTML = html;
+        document.getElementById('modal-resultado').style.display = 'flex';
+    }
+
+    function mostrarResultadoRetiro(r) {
+        const sesion = window.sesionActual;
+        const esMio = r.asignado_a === sesion.nombre;
+        const sinAsignar = !r.asignado_a;
+        const realizado = r.estado === 'realizado';
+        
+        let html = '';
+        
+        if (realizado) {
+            html = `
+                <div class="resultado-icono">✅</div>
+                <h3 class="modal-titulo">Retiro ya realizado</h3>
+                <div class="resultado-numero">${r.num_retiro}</div>
+                <div class="resultado-info">
+                    <b>Cliente:</b> ${r.cliente}<br>
+                    <b>Localidad:</b> ${r.localidad}<br>
+                    <b>Dirección:</b> ${r.direccion || 'No especificada'}<br>
+                    <b>Estado:</b> <span style="color:#38a169; font-weight:bold;">REALIZADO</span>
+                    ${r.realizadoPor ? `<br><b>Realizado por:</b> ${r.realizadoPor}` : ''}
+                </div>
+                <button class="modal-btn modal-btn-gris" onclick="cerrarResultado()">CERRAR</button>
+            `;
+        } else if (esMio) {
+            html = `
+                <div class="resultado-icono">🚚</div>
+                <h3 class="modal-titulo">✅ Mi retiro</h3>
+                <div class="resultado-numero">${r.num_retiro}</div>
+                <div class="resultado-info">
+                    <b>Cliente:</b> ${r.cliente}<br>
+                    <b>Localidad:</b> ${r.localidad}<br>
+                    <b>Dirección:</b> ${r.direccion || 'No especificada'}<br>
+                    <b>Tel:</b> ${r.telefono || '---'}<br>
+                    <b>Bultos:</b> ${r.bultos || '?'}<br>
+                    ${r.observaciones ? `<b>Obs:</b> ${r.observaciones}<br>` : ''}
+                    <b>Pedido por:</b> ${r.pedido_por || '-'}
+                </div>
+                <button class="modal-btn modal-btn-azul" onclick="abrirMapa('${(r.direccion || '').replace(/'/g, "\\'")}', '${(r.localidad || '').replace(/'/g, "\\'")}')">📍 IR CON MAPS</button>
+                <button class="modal-btn modal-btn-verde" onclick="marcarRetiroDesdeScanner('${r.firebaseID}')">✅ MARCAR RETIRADO</button>
+                <button class="modal-btn modal-btn-gris" onclick="cerrarResultado()">CERRAR</button>
+            `;
+        } else if (sinAsignar) {
+            html = `
+                <div class="resultado-icono">⚠️</div>
+                <h3 class="modal-titulo">Retiro sin asignar</h3>
+                <div class="resultado-numero">${r.num_retiro}</div>
+                <div class="resultado-info">
+                    <b>Cliente:</b> ${r.cliente}<br>
+                    <b>Localidad:</b> ${r.localidad}<br>
+                    <b>Dirección:</b> ${r.direccion || 'No especificada'}<br>
+                    <b>Bultos:</b> ${r.bultos || '?'}<br>
+                    <b>Estado:</b> <span style="color:#dd6b20;">SIN ASIGNAR</span>
+                </div>
+                <p style="text-align:center; color:#666; font-size:13px; margin:10px 0;">
+                    ¿Querés asignártelo?
+                </p>
+                <button class="modal-btn modal-btn-naranja" onclick="autoAsignarRetiro('${r.firebaseID}')">✅ SÍ, ASIGNÁRMELO</button>
+                <button class="modal-btn modal-btn-gris" onclick="cerrarResultado()">NO, CERRAR</button>
+            `;
+        } else {
+            html = `
+                <div class="resultado-icono">🚫</div>
+                <h3 class="modal-titulo">Retiro de otro repartidor</h3>
+                <div class="resultado-numero">${r.num_retiro}</div>
+                <div class="resultado-info">
+                    <b>Cliente:</b> ${r.cliente}<br>
+                    <b>Localidad:</b> ${r.localidad}<br>
+                    <b>Asignado a:</b> <span style="color:#e53e3e; font-weight:bold;">${r.asignado_a}</span>
+                </div>
+                <button class="modal-btn modal-btn-gris" onclick="cerrarResultado()">CERRAR</button>
+            `;
+        }
+        
+        document.getElementById('resultado-contenido').innerHTML = html;
+        document.getElementById('modal-resultado').style.display = 'flex';
+    }
+
+    function mostrarResultadoNoEncontrado(numero) {
+        const html = `
+            <div class="resultado-icono">❌</div>
+            <h3 class="modal-titulo">No encontrado</h3>
+            <div class="resultado-numero">${numero}</div>
+            <p style="text-align:center; color:#666; margin:15px 0;">
+                No se encontró ninguna guía ni retiro con ese número en el sistema.
+            </p>
+            <button class="modal-btn modal-btn-gris" onclick="cerrarResultado()">CERRAR</button>
+        `;
+        document.getElementById('resultado-contenido').innerHTML = html;
+        document.getElementById('modal-resultado').style.display = 'flex';
+    }
+
+    window.cerrarResultado = () => {
+        document.getElementById('modal-resultado').style.display = 'none';
+    };
+
+    // ============================================
+    // ACCIONES DESDE EL SCANNER
+    // ============================================
+    window.marcarEntregadoDesdeScanner = async (firebaseID) => {
+        if (!confirm("¿Confirmar entrega de esta guía?")) return;
+        try {
+            await update(ref(db, `moulin/guias/${firebaseID}`), { 
+                estado: 'entregado',
+                fechaEntrega: new Date().toLocaleString('es-AR'),
+                entregadoPor: window.sesionActual.nombre
+            });
+            cerrarResultado();
+            alert("✅ Guía marcada como ENTREGADA");
+        } catch (e) {
+            alert("❌ Error: " + e.message);
+        }
+    };
+
+    window.marcarRetiroDesdeScanner = async (firebaseID) => {
+        if (!confirm("¿Confirmar que retiraste la mercadería?")) return;
+        try {
+            await update(ref(db, `moulin/retiros/${firebaseID}`), {
+                estado: 'realizado',
+                realizadoPor: window.sesionActual.nombre,
+                fechaRealizado: new Date().toLocaleDateString('es-AR')
+            });
+            cerrarResultado();
+            alert("✅ Retiro marcado como REALIZADO");
+        } catch (e) {
+            alert("❌ Error: " + e.message);
+        }
+    };
+
+    window.autoAsignarGuia = async (firebaseID) => {
+        if (!confirm("¿Asignarte esta guía y ponerla en reparto?")) return;
+        try {
+            await update(ref(db, `moulin/guias/${firebaseID}`), {
+                asignado_a: window.sesionActual.nombre,
+                fecha_asignacion: new Date().toLocaleString('es-AR'),
+                asignado_por: window.sesionActual.nombre + ' (auto)',
+                estado: 'en_reparto'
+            });
+            cerrarResultado();
+            alert("✅ Guía asignada y en reparto");
+        } catch (e) {
+            alert("❌ Error: " + e.message);
+        }
+    };
+
+    window.autoAsignarRetiro = async (firebaseID) => {
+        if (!confirm("¿Asignarte este retiro?")) return;
+        try {
+            await update(ref(db, `moulin/retiros/${firebaseID}`), {
+                asignado_a: window.sesionActual.nombre,
+                fecha_asignacion: new Date().toLocaleString('es-AR'),
+                asignado_por: window.sesionActual.nombre + ' (auto)'
+            });
+            cerrarResultado();
+            alert("✅ Retiro asignado");
+        } catch (e) {
+            alert("❌ Error: " + e.message);
+        }
+    };
 
     // ============================================
     // RENDERIZADO UNIFICADO
