@@ -128,7 +128,10 @@
 <div class="header">
     <div style="display:flex; justify-content:space-between; align-items:center;">
         <h3 style="margin:0;">MOULIN MÓVIL</h3>
-        <span id="prefijo-badge" style="background:#fff; color:#1a4a7a; padding:2px 8px; border-radius:4px; font-weight:bold; font-size:12px;">---</span>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <span id="prefijo-badge" style="background:#fff; color:#1a4a7a; padding:2px 8px; border-radius:4px; font-weight:bold; font-size:12px;">---</span>
+            <button onclick="cerrarSesion()" style="background:#e53e3e; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:11px; cursor:pointer;">🚪 Salir</button>
+        </div>
     </div>
     <small id="user-info">Cargando...</small>
 </div>
@@ -177,6 +180,37 @@
     window.retiros = [];
     window.filtroEstadoActual = 'todos';
     window.sesionActual = null;
+
+    // ============================================
+    // VERIFICAR SESIÓN AL CARGAR
+    // ============================================
+    function verificarSesion() {
+        const sesionStr = localStorage.getItem('moulin_sesion');
+        if (!sesionStr) return false;
+        
+        try {
+            const sesion = JSON.parse(sesionStr);
+            const ahora = Date.now();
+            const horasPasadas = (ahora - sesion.timestampLogin) / (1000 * 60 * 60);
+            
+            if (horasPasadas > 12) {
+                localStorage.removeItem('moulin_sesion');
+                return false;
+            }
+            
+            window.sesionActual = sesion;
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    window.cerrarSesion = () => {
+        if (confirm('¿Cerrar sesión?\nTendrás que iniciar sesión de nuevo.')) {
+            localStorage.removeItem('moulin_sesion');
+            location.reload();
+        }
+    };
 
     // ============================================
     // CARGAR REPARTIDORES AL INICIO
@@ -232,9 +266,11 @@
             nombre: selected.dataset.nombre,
             prefijo: selected.dataset.sucursal,
             rol: 'repartidor',
-            repartidorID: select.value
+            repartidorID: select.value,
+            timestampLogin: Date.now()
         };
-        sessionStorage.setItem('moulin_sesion', JSON.stringify(window.sesionActual));
+        
+        localStorage.setItem('moulin_sesion', JSON.stringify(window.sesionActual));
         
         errorDiv.style.display = 'none';
         mostrarPantallaPrincipal();
@@ -419,6 +455,13 @@
         document.getElementById('qrTitle').innerText = num;
     };
     window.cerrarQR = () => { document.getElementById('modalQR').style.display = 'none'; };
+
+    // ============================================
+    // VERIFICAR SESIÓN AL CARGAR LA PÁGINA
+    // ============================================
+    if (verificarSesion()) {
+        mostrarPantallaPrincipal();
+    }
 </script>
 
 </body>
