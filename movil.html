@@ -6,330 +6,6 @@
     <title>MOULIN MÓVIL V8.9</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-
-    const firebaseConfig = {
-        apiKey: "AIzaSyCAsCocDQjimpjNo5l2oHTGO82XNTG7tzY",
-        authDomain: "transporte-moulin.firebaseapp.com",
-        databaseURL: "https://transporte-moulin-default-rtdb.firebaseio.com",
-        projectId: "transporte-moulin",
-        storageBucket: "transporte-moulin.firebasestorage.app",
-        messagingSenderId: "1022730425566",
-        appId: "1:1022730425566:web:1ec5b014b71d14ce579e4f"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    
-    window.historial = [];
-    window.retiros = [];
-    window.filtroEstadoActual = 'todos';
-    window.sesionActual = null;
-
-    <!-- ============================================ -->
-<!-- PANTALLA DE LOGIN -->
-<!-- ============================================ -->
-<div id="pantalla-login">
-    <div class="login-card-movil">
-        <h2>🚚 MOULIN MÓVIL</h2>
-        <div class="subtitulo">Sistema de entregas y retiros</div>
-        
-        <!-- Selector de modo -->
-        <div style="margin-bottom:20px;">
-            <label style="display:block; margin-bottom:10px;">
-                <input type="radio" name="modo-login" value="repartidor" checked onchange="cambiarModoLogin()"> 
-                <b>🏍️ Repartidor</b> (con PIN)
-            </label>
-            <label style="display:block;">
-                <input type="radio" name="modo-login" value="usuario" onchange="cambiarModoLogin()"> 
-                <b>🏢 Usuario del sistema</b> (usuario/contraseña)
-            </label>
-        </div>
-        
-        <!-- Formulario para REPARTIDOR -->
-        <div id="form-repartidor">
-            <label>Seleccioná tu nombre:</label>
-            <select id="select-repartidor">
-                <option value="">-- Cargando repartidores... --</option>
-            </select>
-            
-            <label>PIN de acceso:</label>
-            <input type="password" id="input-pin" maxlength="4" inputmode="numeric" placeholder="••••">
-            
-            <button class="btn-login" onclick="loginRepartidor()">🏍️ INGRESAR</button>
-        </div>
-        
-        <!-- Formulario para USUARIO -->
-        <div id="form-usuario" style="display:none;">
-            <label>Usuario:</label>
-            <input type="text" id="input-usuario" placeholder="ej: admin, rosario, recon">
-            
-            <label>Contraseña:</label>
-            <input type="password" id="input-contrasena" placeholder="Contraseña">
-            
-            <button class="btn-login" onclick="loginUsuario()">🏢 INGRESAR</button>
-        </div>
-        
-        <div id="error-login" class="error"></div>
-    </div>
-</div>
-
-    // ============================================
-    // LISTENERS
-    // ============================================
-    
-    function inicializarListeners() {
-        const sesion = window.sesionActual;
-        const prefijoUser = sesion.prefijo ? sesion.prefijo.toUpperCase() : "TODO";
-        const esRepartidor = sesion.rol === 'repartidor';
-        
-        // Listener de GUÍAS
-        onValue(ref(db, 'moulin/guias'), (snapshot) => {
-            const data = snapshot.val();
-            let listaCompleta = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})) : [];
-            listaCompleta.sort((a,b) => b.firebaseID - a.firebaseID);
-
-            if (esRepartidor) {
-                window.historial = listaCompleta.filter(g => g.asignado_a === sesion.nombre);
-            } else if (prefijoUser !== "TODO" && prefijoUser !== "ADM") {
-                window.historial = listaCompleta.filter(g => {
-                    const destino = (g.d_l || "").toUpperCase();
-                    const origen = (g.r_l || "").toUpperCase();
-                    if (prefijoUser === "REC" || prefijoUser === "RECON") 
-                        return destino.includes("RECONQUISTA") || origen.includes("RECONQUISTA");
-                    if (prefijoUser === "ROS") 
-                        return destino.includes("ROSARIO") || origen.includes("ROSARIO");
-                    if (prefijoUser === "STAFE") 
-                        return destino.includes("SANTA FE") || origen.includes("SANTA FE");
-                    return destino.includes(prefijoUser) || origen.includes(prefijoUser);
-                });
-            } else {
-                window.historial = listaCompleta;
-            }
-            renderizarLista();
-        });
-        
-        // Listener de RETIROS
-        onValue(ref(db, 'moulin/retiros'), (snapshot) => {
-            const data = snapshot.val();
-            let retirosCompleta = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})) : [];
-            retirosCompleta.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
-            
-            if (esRepartidor) {
-                window.retiros = retirosCompleta.filter(r => 
-                    r.asignado_a === sesion.nombre && r.estado === 'pendiente'
-                );
-            } else if (prefijoUser !== "TODO" && prefijoUser !== "ADM") {
-                window.retiros = retirosCompleta.filter(r => {
-                    const localidad = (r.localidad || '').toUpperCase();
-                    const pedidoPor = (r.pedido_por || '').toUpperCase();
-                    return localidad === prefijoUser || pedidoPor === prefijoUser;
-                });
-            } else {
-                window.retiros = retirosCompleta;
-            }
-            renderizarLista();
-        });
-    }
-
-    // ============================================
-    // RENDERIZADO UNIFICADO (guías + retiros)
-    // ============================================
-    window.renderizarLista = () => {
-        const busq = (document.getElementById('search')?.value || '').toLowerCase();
-        
-        // Filtrar guías
-        let guiasFiltradas = window.historial.filter(g => 
-            (g.num && g.num.toLowerCase().includes(busq)) || 
-            (g.d_n && g.d_n.toLowerCase().includes(busq)) ||
-            (g.d_l && g.d_l.toLowerCase().includes(busq))
-        );
-        
-        // Filtrar retiros
-        let retirosFiltrados = window.retiros.filter(r => {
-            const texto = `${r.num_retiro} ${r.cliente} ${r.localidad} ${r.direccion}`.toLowerCase();
-            return texto.includes(busq);
-        });
-        
-        // Aplicar filtro de estado
-        if (window.filtroEstadoActual === 'pendientes') {
-            guiasFiltradas = guiasFiltradas.filter(g => g.estado !== 'entregado');
-            retirosFiltrados = retirosFiltrados.filter(r => r.estado === 'pendiente');
-        } else if (window.filtroEstadoActual === 'entregado') {
-            guiasFiltradas = guiasFiltradas.filter(g => g.estado === 'entregado');
-            retirosFiltrados = []; // Los retiros no tienen estado "entregado"
-        }
-        
-        let html = '';
-        
-        // Sección de ENTREGAS (guías)
-        if (guiasFiltradas.length > 0) {
-            html += `<div style="background:#1a4a7a; color:white; padding:8px 12px; border-radius:6px; margin-bottom:10px; font-weight:bold; font-size:14px;">📦 ENTREGAS (${guiasFiltradas.length})</div>`;
-            html += guiasFiltradas.map(g => `
-                <div class="card-movil">
-                    <div onclick="toggleDetalles('g-${g.firebaseID}')">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <b style="font-size:18px; color:#1a4a7a;">${g.num}</b>
-                            <span class="badge ${g.estado || 'recibido'}">${(g.estado || 'recibido').toUpperCase()}</span>
-                        </div>
-                        <div style="margin:8px 0; font-size:14px;">
-                            <b>Cliente:</b> ${g.d_n}<br>
-                            <b>Destino:</b> ${g.d_l}<br>
-                            <small style="color:#666;">${g.pago_en} | ${g.condicion}</small>
-                            ${g.asignado_a ? `<br><small style="color:#6b46c1;">🏍️ ${g.asignado_a}</small>` : ''}
-                        </div>
-                    </div>
-                    <div id="detalles-g-${g.firebaseID}" class="detalles-extra" style="display:none; border-top:1px solid #eee; padding-top:10px; margin-top:10px;">
-                        <p><b>Dirección:</b> ${g.d_d || 'No especificada'}</p>
-                        <p><b>Tel:</b> ${g.d_t || '---'}</p>
-                        <p><b>Bultos:</b> ${g.cant_t} | <b>Total:</b> $${g.total}</p>
-                        <button onclick="abrirMapa('${(g.d_d || '').replace(/'/g, "\\'")}', '${(g.d_l || '').replace(/'/g, "\\'")}')" class="btn-mapa">📍 Ir con Maps</button>
-                    </div>
-                    <div style="display:flex; gap:5px; margin-top:10px;">
-                        <select onchange="actualizarEstado('${g.firebaseID}', this.value)" style="flex:1; padding:10px; border-radius:5px; border:1px solid #1a4a7a; font-weight:bold;">
-                            <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
-                            <option value="deposito" ${g.estado==='deposito'?'selected':''}>En Depósito</option>
-                            <option value="en_reparto" ${g.estado==='en_reparto'?'selected':''}>En Reparto</option>
-                            <option value="entregado" ${g.estado==='entregado'?'selected':''}>ENTREGADO</option>
-                        </select>
-                        <button onclick="verQR('${g.num}')" class="btn-qr">QR</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        // Sección de RETIROS
-        if (retirosFiltrados.length > 0) {
-            html += `<div style="background:#f6ad55; color:white; padding:8px 12px; border-radius:6px; margin:15px 0 10px 0; font-weight:bold; font-size:14px;">🚚 RETIROS (${retirosFiltrados.length})</div>`;
-            html += retirosFiltrados.map(r => `
-                <div class="card-movil" style="border-left-color:#f6ad55;">
-                    <div onclick="toggleDetalles('r-${r.firebaseID}')">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <b style="font-size:18px; color:#dd6b20;">${r.num_retiro}</b>
-                            <span class="badge" style="background:#fff3cd; color:#dd6b20;">PENDIENTE</span>
-                        </div>
-                        <div style="margin:8px 0; font-size:14px;">
-                            <b>Cliente:</b> ${r.cliente}<br>
-                            <b>Localidad:</b> ${r.localidad}<br>
-                            <small style="color:#666;">📦 ${r.bultos || '?'} bultos</small>
-                            ${r.asignado_a ? `<br><small style="color:#6b46c1;">🏍️ ${r.asignado_a}</small>` : ''}
-                        </div>
-                    </div>
-                    <div id="detalles-r-${r.firebaseID}" class="detalles-extra" style="display:none; border-top:1px solid #eee; padding-top:10px; margin-top:10px;">
-                        <p><b>Dirección:</b> ${r.direccion || 'No especificada'}</p>
-                        <p><b>Tel:</b> ${r.telefono || '---'}</p>
-                        ${r.observaciones ? `<p><b>Obs:</b> ${r.observaciones}</p>` : ''}
-                        <p><b>Pedido por:</b> ${r.pedido_por || '-'}</p>
-                        <button onclick="abrirMapa('${(r.direccion || '').replace(/'/g, "\\'")}', '${(r.localidad || '').replace(/'/g, "\\'")}')" class="btn-mapa">📍 Ir con Maps</button>
-                    </div>
-                    <div style="display:flex; gap:5px; margin-top:10px;">
-                        <button onclick="marcarRetiroRealizado('${r.firebaseID}')" style="flex:1; padding:10px; background:#38a169; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">✅ RETIRADO</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        if (guiasFiltradas.length === 0 && retirosFiltrados.length === 0) {
-            html = "<div style='text-align:center; padding:20px; color:#666;'>No hay entregas ni retiros pendientes.</div>";
-        }
-        
-        document.getElementById('lista').innerHTML = html;
-    };
-
-    // ============================================
-    // UTILIDADES
-    // ============================================
-    window.cambiarFiltro = (nuevoFiltro) => {
-        window.filtroEstadoActual = nuevoFiltro;
-        document.querySelectorAll('.btn-filtro').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('btn-' + nuevoFiltro).classList.add('active');
-        renderizarLista();
-    };
-
-    window.abrirMapa = (dir, loc) => {
-        const q = encodeURIComponent(`${dir}, ${loc}, Argentina`);
-        window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank');
-    };
-
-    window.actualizarEstado = (id, est) => { 
-        update(ref(db, `moulin/guias/${id}`), { estado: est }); 
-    };
-    
-    window.marcarRetiroRealizado = async (firebaseID) => {
-        if (!confirm("¿Confirmar que retiraste la mercadería?")) return;
-        try {
-            await update(ref(db, `moulin/retiros/${firebaseID}`), {
-                estado: 'realizado',
-                realizadoPor: window.sesionActual.nombre,
-                fechaRealizado: new Date().toLocaleDateString('es-AR')
-            });
-            alert("✅ Retiro marcado como realizado");
-        } catch (e) {
-            alert("❌ Error: " + e.message);
-        }
-    };
-
-    window.toggleDetalles = (id) => { 
-        const el = document.getElementById(`detalles-${id}`); 
-        el.style.display = el.style.display === 'none' ? 'block' : 'none'; 
-    };
-    
-    window.verQR = (num) => {
-        document.getElementById('modalQR').style.display = 'flex';
-        document.getElementById('qrcode').innerHTML = "";
-        new QRCode(document.getElementById("qrcode"), { text: num, width: 200, height: 200 });
-        document.getElementById('qrTitle').innerText = num;
-    };
-    window.cerrarQR = () => { document.getElementById('modalQR').style.display = 'none'; };
-
-    // ============================================
-// CAMBIO DE MODO LOGIN
-// ============================================
-window.cambiarModoLogin = () => {
-    const modo = document.querySelector('input[name="modo-login"]:checked').value;
-    document.getElementById('form-repartidor').style.display = modo === 'repartidor' ? 'block' : 'none';
-    document.getElementById('form-usuario').style.display = modo === 'usuario' ? 'block' : 'none';
-    document.getElementById('error-login').style.display = 'none';
-};
-
-// ============================================
-// LOGIN CON USUARIO/CONTRASEÑA
-// ============================================
-window.loginUsuario = () => {
-    const usuario = document.getElementById('input-usuario').value.trim().toLowerCase();
-    const contrasena = document.getElementById('input-contrasena').value;
-    const errorDiv = document.getElementById('error-login');
-    
-    const usuarios = [
-        { u: "admin", p: "moulin2024", nombre: "Administración", prefijo: "TODO" }, 
-        { u: "rosario", p: "moulinros", nombre: "Depósito Rosario", prefijo: "ROS" },
-        { u: "santafe", p: "moulinsfe", nombre: "Depósito Santa Fe", prefijo: "STAFE" },
-        { u: "recon", p: "moulinrec", nombre: "Depósito Reconquista", prefijo: "REC" },
-        { u: "bsas", p: "moulinbsas", nombre: "Depósito BSAS", prefijo: "BSAS" }
-    ];
-    
-    const encontrado = usuarios.find(x => x.u === usuario && x.p === contrasena);
-    
-    if (!encontrado) {
-        errorDiv.innerText = '❌ Usuario o contraseña incorrectos';
-        errorDiv.style.display = 'block';
-        return;
-    }
-    
-    window.sesionActual = {
-        nombre: encontrado.nombre,
-        prefijo: encontrado.prefijo,
-        rol: 'deposito'
-    };
-    sessionStorage.setItem('moulin_sesion', JSON.stringify(window.sesionActual));
-    
-    errorDiv.style.display = 'none';
-    mostrarPantallaPrincipal();
-};
-</script>
-
     <style>
         body { font-family: sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
         
@@ -393,36 +69,6 @@ window.loginUsuario = () => {
             cursor: pointer;
             margin-top: 20px;
         }
-        .btn-login-secundario {
-            width: 100%;
-            padding: 12px;
-            background: white;
-            color: #1a4a7a;
-            border: 2px solid #1a4a7a;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        .separator {
-            text-align: center;
-            color: #999;
-            margin: 20px 0 10px 0;
-            font-size: 12px;
-            position: relative;
-        }
-        .separator::before,
-        .separator::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            width: 40%;
-            height: 1px;
-            background: #ddd;
-        }
-        .separator::before { left: 0; }
-        .separator::after { right: 0; }
         .error {
             color: #e53e3e;
             font-size: 13px;
@@ -471,14 +117,6 @@ window.loginUsuario = () => {
         <button class="btn-login" onclick="loginRepartidor()">🏍️ INGRESAR COMO REPARTIDOR</button>
         
         <div id="error-login" class="error"></div>
-        
-        <div class="separator">o</div>
-        
-        <button class="btn-login-secundario" onclick="loginDeposito()">🏢 SOY DEL DEPÓSITO</button>
-        
-        <div style="margin-top:20px; padding:10px; background:#fff3cd; border-radius:6px; font-size:11px; color:#856404; text-align:center;">
-            💡 Si sos del depósito, primero iniciá sesión en la PC
-        </div>
     </div>
 </div>
 
@@ -517,6 +155,271 @@ window.loginUsuario = () => {
         <button onclick="cerrarQR()" style="margin-top:20px; padding:12px; width:100%; background:#e53e3e; color:white; border:none; border-radius:5px; font-weight:bold;">CERRAR</button>
     </div>
 </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+    import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyCAsCocDQjimpjNo5l2oHTGO82XNTG7tzY",
+        authDomain: "transporte-moulin.firebaseapp.com",
+        databaseURL: "https://transporte-moulin-default-rtdb.firebaseio.com",
+        projectId: "transporte-moulin",
+        storageBucket: "transporte-moulin.firebasestorage.app",
+        messagingSenderId: "1022730425566",
+        appId: "1:1022730425566:web:1ec5b014b71d14ce579e4f"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    
+    window.historial = [];
+    window.retiros = [];
+    window.filtroEstadoActual = 'todos';
+    window.sesionActual = null;
+
+    // ============================================
+    // CARGAR REPARTIDORES AL INICIO
+    // ============================================
+    onValue(ref(db, 'moulin/repartidores'), (snapshot) => {
+        const data = snapshot.val();
+        if (!data) return;
+        
+        const repartidores = Object.entries(data)
+            .map(([id, val]) => ({ ...val, firebaseID: id }))
+            .filter(r => r.activo !== false && !r.eliminado)
+            .sort((a, b) => a.nombre.localeCompare(b.nombre));
+        
+        const select = document.getElementById('select-repartidor');
+        if (!select) return;
+        
+        select.innerHTML = '<option value="">-- Seleccioná tu nombre --</option>';
+        
+        repartidores.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.firebaseID;
+            opt.textContent = `${r.nombre} (${r.sucursal})`;
+            opt.dataset.pin = r.pin || '';
+            opt.dataset.sucursal = r.sucursal || '';
+            opt.dataset.nombre = r.nombre || '';
+            select.appendChild(opt);
+        });
+    });
+
+    // ============================================
+    // LOGIN REPARTIDOR
+    // ============================================
+    window.loginRepartidor = () => {
+        const select = document.getElementById('select-repartidor');
+        const pin = document.getElementById('input-pin').value.trim();
+        const errorDiv = document.getElementById('error-login');
+        
+        if (!select.value) {
+            errorDiv.innerText = '⚠️ Seleccioná tu nombre';
+            errorDiv.style.display = 'block';
+            return;
+        }
+        
+        const selected = select.options[select.selectedIndex];
+        
+        if (pin !== selected.dataset.pin) {
+            errorDiv.innerText = '❌ PIN incorrecto';
+            errorDiv.style.display = 'block';
+            return;
+        }
+        
+        window.sesionActual = {
+            nombre: selected.dataset.nombre,
+            prefijo: selected.dataset.sucursal,
+            rol: 'repartidor',
+            repartidorID: select.value
+        };
+        sessionStorage.setItem('moulin_sesion', JSON.stringify(window.sesionActual));
+        
+        errorDiv.style.display = 'none';
+        mostrarPantallaPrincipal();
+    };
+
+    function mostrarPantallaPrincipal() {
+        document.getElementById('pantalla-login').style.display = 'none';
+        document.getElementById('pantalla-principal').style.display = 'block';
+        
+        const sesion = window.sesionActual;
+        document.getElementById('user-info').innerText = 
+            `🏍️ Repartidor: ${sesion.nombre}`;
+        document.getElementById('prefijo-badge').innerText = sesion.prefijo;
+        
+        inicializarListeners();
+    }
+
+    // ============================================
+    // LISTENERS
+    // ============================================
+    
+    function inicializarListeners() {
+        const sesion = window.sesionActual;
+        
+        // Listener de GUÍAS
+        onValue(ref(db, 'moulin/guias'), (snapshot) => {
+            const data = snapshot.val();
+            let listaCompleta = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})) : [];
+            listaCompleta.sort((a,b) => b.firebaseID - a.firebaseID);
+
+            window.historial = listaCompleta.filter(g => g.asignado_a === sesion.nombre);
+            renderizarLista();
+        });
+        
+        // Listener de RETIROS
+        onValue(ref(db, 'moulin/retiros'), (snapshot) => {
+            const data = snapshot.val();
+            let retirosCompleta = data ? Object.entries(data).map(([id, val]) => ({...val, firebaseID: id})) : [];
+            retirosCompleta.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
+            
+            window.retiros = retirosCompleta.filter(r => 
+                r.asignado_a === sesion.nombre && r.estado === 'pendiente'
+            );
+            renderizarLista();
+        });
+    }
+
+    // ============================================
+    // RENDERIZADO UNIFICADO
+    // ============================================
+    window.renderizarLista = () => {
+        const busq = (document.getElementById('search')?.value || '').toLowerCase();
+        
+        let guiasFiltradas = window.historial.filter(g => 
+            (g.num && g.num.toLowerCase().includes(busq)) || 
+            (g.d_n && g.d_n.toLowerCase().includes(busq)) ||
+            (g.d_l && g.d_l.toLowerCase().includes(busq))
+        );
+        
+        let retirosFiltrados = window.retiros.filter(r => {
+            const texto = `${r.num_retiro} ${r.cliente} ${r.localidad} ${r.direccion}`.toLowerCase();
+            return texto.includes(busq);
+        });
+        
+        if (window.filtroEstadoActual === 'pendientes') {
+            guiasFiltradas = guiasFiltradas.filter(g => g.estado !== 'entregado');
+        }
+        
+        let html = '';
+        
+        if (guiasFiltradas.length > 0) {
+            html += `<div style="background:#1a4a7a; color:white; padding:8px 12px; border-radius:6px; margin-bottom:10px; font-weight:bold; font-size:14px;">📦 ENTREGAS (${guiasFiltradas.length})</div>`;
+            html += guiasFiltradas.map(g => `
+                <div class="card-movil">
+                    <div onclick="toggleDetalles('g-${g.firebaseID}')">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <b style="font-size:18px; color:#1a4a7a;">${g.num}</b>
+                            <span class="badge ${g.estado || 'recibido'}">${(g.estado || 'recibido').toUpperCase()}</span>
+                        </div>
+                        <div style="margin:8px 0; font-size:14px;">
+                            <b>Cliente:</b> ${g.d_n}<br>
+                            <b>Destino:</b> ${g.d_l}<br>
+                            <small style="color:#666;">${g.pago_en} | ${g.condicion}</small>
+                        </div>
+                    </div>
+                    <div id="detalles-g-${g.firebaseID}" style="display:none; border-top:1px solid #eee; padding-top:10px; margin-top:10px;">
+                        <p><b>Dirección:</b> ${g.d_d || 'No especificada'}</p>
+                        <p><b>Tel:</b> ${g.d_t || '---'}</p>
+                        <p><b>Bultos:</b> ${g.cant_t} | <b>Total:</b> $${g.total}</p>
+                        <button onclick="abrirMapa('${(g.d_d || '').replace(/'/g, "\\'")}', '${(g.d_l || '').replace(/'/g, "\\'")}')" class="btn-mapa">📍 Ir con Maps</button>
+                    </div>
+                    <div style="display:flex; gap:5px; margin-top:10px;">
+                        <select onchange="actualizarEstado('${g.firebaseID}', this.value)" style="flex:1; padding:10px; border-radius:5px; border:1px solid #1a4a7a; font-weight:bold;">
+                            <option value="recibido" ${g.estado==='recibido'?'selected':''}>Recibido</option>
+                            <option value="deposito" ${g.estado==='deposito'?'selected':''}>En Depósito</option>
+                            <option value="en_reparto" ${g.estado==='en_reparto'?'selected':''}>En Reparto</option>
+                            <option value="entregado" ${g.estado==='entregado'?'selected':''}>ENTREGADO</option>
+                        </select>
+                        <button onclick="verQR('${g.num}')" class="btn-qr">QR</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        if (retirosFiltrados.length > 0) {
+            html += `<div style="background:#f6ad55; color:white; padding:8px 12px; border-radius:6px; margin:15px 0 10px 0; font-weight:bold; font-size:14px;">🚚 RETIROS (${retirosFiltrados.length})</div>`;
+            html += retirosFiltrados.map(r => `
+                <div class="card-movil" style="border-left-color:#f6ad55;">
+                    <div onclick="toggleDetalles('r-${r.firebaseID}')">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <b style="font-size:18px; color:#dd6b20;">${r.num_retiro}</b>
+                            <span class="badge" style="background:#fff3cd; color:#dd6b20;">PENDIENTE</span>
+                        </div>
+                        <div style="margin:8px 0; font-size:14px;">
+                            <b>Cliente:</b> ${r.cliente}<br>
+                            <b>Localidad:</b> ${r.localidad}<br>
+                            <small style="color:#666;">📦 ${r.bultos || '?'} bultos</small>
+                        </div>
+                    </div>
+                    <div id="detalles-r-${r.firebaseID}" style="display:none; border-top:1px solid #eee; padding-top:10px; margin-top:10px;">
+                        <p><b>Dirección:</b> ${r.direccion || 'No especificada'}</p>
+                        <p><b>Tel:</b> ${r.telefono || '---'}</p>
+                        ${r.observaciones ? `<p><b>Obs:</b> ${r.observaciones}</p>` : ''}
+                        <button onclick="abrirMapa('${(r.direccion || '').replace(/'/g, "\\'")}', '${(r.localidad || '').replace(/'/g, "\\'")}')" class="btn-mapa">📍 Ir con Maps</button>
+                    </div>
+                    <div style="display:flex; gap:5px; margin-top:10px;">
+                        <button onclick="marcarRetiroRealizado('${r.firebaseID}')" style="flex:1; padding:10px; background:#38a169; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">✅ RETIRADO</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        if (guiasFiltradas.length === 0 && retirosFiltrados.length === 0) {
+            html = "<div style='text-align:center; padding:20px; color:#666;'>No hay entregas ni retiros pendientes.</div>";
+        }
+        
+        document.getElementById('lista').innerHTML = html;
+    };
+
+    // ============================================
+    // UTILIDADES
+    // ============================================
+    window.cambiarFiltro = (nuevoFiltro) => {
+        window.filtroEstadoActual = nuevoFiltro;
+        document.querySelectorAll('.btn-filtro').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('btn-' + nuevoFiltro).classList.add('active');
+        renderizarLista();
+    };
+
+    window.abrirMapa = (dir, loc) => {
+        const q = encodeURIComponent(`${dir}, ${loc}, Argentina`);
+        window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank');
+    };
+
+    window.actualizarEstado = (id, est) => { 
+        update(ref(db, `moulin/guias/${id}`), { estado: est }); 
+    };
+    
+    window.marcarRetiroRealizado = async (firebaseID) => {
+        if (!confirm("¿Confirmar que retiraste la mercadería?")) return;
+        try {
+            await update(ref(db, `moulin/retiros/${firebaseID}`), {
+                estado: 'realizado',
+                realizadoPor: window.sesionActual.nombre,
+                fechaRealizado: new Date().toLocaleDateString('es-AR')
+            });
+            alert("✅ Retiro marcado como realizado");
+        } catch (e) {
+            alert("❌ Error: " + e.message);
+        }
+    };
+
+    window.toggleDetalles = (id) => { 
+        const el = document.getElementById(`detalles-${id}`); 
+        el.style.display = el.style.display === 'none' ? 'block' : 'none'; 
+    };
+    
+    window.verQR = (num) => {
+        document.getElementById('modalQR').style.display = 'flex';
+        document.getElementById('qrcode').innerHTML = "";
+        new QRCode(document.getElementById("qrcode"), { text: num, width: 200, height: 200 });
+        document.getElementById('qrTitle').innerText = num;
+    };
+    window.cerrarQR = () => { document.getElementById('modalQR').style.display = 'none'; };
+</script>
 
 </body>
 </html>
