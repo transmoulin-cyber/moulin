@@ -167,6 +167,39 @@ window.completarCliente = (tipo) => {
 };
 
 // ============================================
+// GESTIÓN DE LOCALIDADES (SELECTOR + OTRA)
+// ============================================
+window.gestionarOtraLocalidad = (tipo) => {
+    const select = document.getElementById(`select_${tipo}_localidad`);
+    const inputOtra = document.getElementById(`${tipo}_localidad_otra`);
+    const inputHidden = document.getElementById(`${tipo}_localidad`);
+    
+    if (!select || !inputOtra || !inputHidden) return;
+
+    if (select.value === 'OTRA') {
+        inputOtra.style.display = 'block';
+        inputOtra.focus();
+        inputHidden.value = '';
+    } else {
+        inputOtra.style.display = 'none';
+        inputOtra.value = '';
+        inputHidden.value = select.value;
+    }
+};
+
+// Listener para cuando escriben en "OTRA"
+document.addEventListener('DOMContentLoaded', () => {
+    ['r', 'd', 'ret'].forEach(tipo => {
+        const inputOtra = document.getElementById(`${tipo}_localidad_otra`);
+        const inputHidden = document.getElementById(`${tipo}_localidad`);
+        if (inputOtra && inputHidden) {
+            inputOtra.addEventListener('input', () => {
+                inputHidden.value = inputOtra.value.trim().toUpperCase();
+            });
+        }
+    });
+});
+// ============================================
 // FILTRO DINÁMICO DE LOCALIDADES
 // ============================================
 window.actualizarFiltroLocalidades = function () {
