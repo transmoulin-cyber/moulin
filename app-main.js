@@ -170,9 +170,26 @@ window.completarCliente = (tipo) => {
 // GESTIÓN DE LOCALIDADES (SELECTOR + OTRA)
 // ============================================
 window.gestionarOtraLocalidad = (tipo) => {
-    const select = document.getElementById(`select_${tipo}_localidad`);
-    const inputOtra = document.getElementById(`${tipo}_localidad_otra`);
-    const inputHidden = document.getElementById(`${tipo}_localidad`);
+    // Mapeo de IDs según el tipo
+    let selectId, inputOtraId, inputHiddenId;
+    
+    if (tipo === 'r') {
+        selectId = 'select_r_l';
+        inputOtraId = 'r_l_otra';
+        inputHiddenId = 'r_l';
+    } else if (tipo === 'd') {
+        selectId = 'select_d_l';
+        inputOtraId = 'd_l_otra';
+        inputHiddenId = 'd_l';
+    } else if (tipo === 'ret') {
+        selectId = 'select_ret_localidad';
+        inputOtraId = 'ret_localidad_otra';
+        inputHiddenId = 'ret_localidad';
+    }
+    
+    const select = document.getElementById(selectId);
+    const inputOtra = document.getElementById(inputOtraId);
+    const inputHidden = document.getElementById(inputHiddenId);
     
     if (!select || !inputOtra || !inputHidden) return;
 
@@ -187,18 +204,6 @@ window.gestionarOtraLocalidad = (tipo) => {
     }
 };
 
-// Listener para cuando escriben en "OTRA"
-document.addEventListener('DOMContentLoaded', () => {
-    ['r', 'd', 'ret'].forEach(tipo => {
-        const inputOtra = document.getElementById(`${tipo}_localidad_otra`);
-        const inputHidden = document.getElementById(`${tipo}_localidad`);
-        if (inputOtra && inputHidden) {
-            inputOtra.addEventListener('input', () => {
-                inputHidden.value = inputOtra.value.trim().toUpperCase();
-            });
-        }
-    });
-});
 // ============================================
 // FILTRO DINÁMICO DE LOCALIDADES
 // ============================================
