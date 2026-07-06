@@ -50,7 +50,28 @@
                 <b>REMITENTE</b>
                 <input type="text" id="r_n" list="lista_clientes" placeholder="Nombre/Empresa" oninput="completarCliente('r')">
                 <input type="text" id="r_d" placeholder="Dirección">
-                <input type="text" id="r_l" placeholder="Localidad">
+                <select id="select_r_l" onchange="gestionarOtraLocalidad('r')" style="width:100%; padding:8px; border:2px solid var(--azul); border-radius:4px;">
+ 
+    <option value="">-- Seleccioná Localidad --</option>
+    <option value="CABA">CABA</option>
+    <option value="Calchaqui">Calchaqui</option>
+    <option value="Corrientes">Corrientes</option>
+    <option value="Florencia">Florencia</option>
+    <option value="Gobernador Crespo">Gobernador Crespo</option>
+    <option value="Las Toscas">Las Toscas</option>
+    <option value="Malabrigo">Malabrigo</option>
+    <option value="Reconquista">Reconquista</option>
+    <option value="Resistencia">Resistencia</option>
+    <option value="Rosario">Rosario</option>
+    <option value="San Justo">San Justo</option>
+    <option value="Santa Fe">Santa Fe</option>
+    <option value="Vera">Vera</option>
+    <option value="Villa Ocampo">Villa Ocampo</option>
+    <option value="OTRA">✏️ OTRA (Escribir manualmente)</option>
+</select>
+<input type="text" id="r_l_otra" placeholder="Escribí localidad..." style="display:none; width:100%; margin-top:5px; padding:8px; border:2px solid orange; border-radius:4px;">
+<input type="hidden" id="r_l">
+                
                 <input type="text" id="r_t" placeholder="Teléfono">
                 <input type="text" id="r_cbu" placeholder="CBU Remitente">
             </div>
@@ -58,7 +79,28 @@
                 <b>DESTINATARIO</b>
                 <input type="text" id="d_n" list="lista_clientes" placeholder="Nombre/Empresa" oninput="completarCliente('d')">
                 <input type="text" id="d_d" placeholder="Dirección">
-                <input type="text" id="d_l" placeholder="Localidad">
+
+                <select id="select_d_l" onchange="gestionarOtraLocalidad('d')" style="width:100%; padding:8px; border:2px solid var(--azul); border-radius:4px;">
+    <option value="">-- Seleccioná Localidad --</option>
+    <option value="CABA">CABA</option>
+    <option value="Calchaqui">Calchaqui</option>
+    <option value="Corrientes">Corrientes</option>
+    <option value="Florencia">Florencia</option>
+    <option value="Gobernador Crespo">Gobernador Crespo</option>
+    <option value="Las Toscas">Las Toscas</option>
+    <option value="Malabrigo">Malabrigo</option>
+    <option value="Reconquista">Reconquista</option>
+    <option value="Resistencia">Resistencia</option>
+    <option value="Rosario">Rosario</option>
+    <option value="San Justo">San Justo</option>
+    <option value="Santa Fe">Santa Fe</option>
+    <option value="Vera">Vera</option>
+    <option value="Villa Ocampo">Villa Ocampo</option>
+    <option value="OTRA">✏️ OTRA (Escribir manualmente)</option>
+</select>
+<input type="text" id="d_l_otra" placeholder="Escribí localidad..." style="display:none; width:100%; margin-top:5px; padding:8px; border:2px solid orange; border-radius:4px;">
+<input type="hidden" id="d_l">
+                
                 <input type="text" id="d_t" placeholder="Teléfono">
                 <input type="text" id="d_cbu" placeholder="CBU Destinatario">
             </div>
@@ -144,7 +186,28 @@
                 </div>
                 <div>
                     <label class="label-form">Localidad donde se retira</label>
-                    <input type="text" id="ret_localidad" placeholder="Ej: ROSARIO" list="lista_localidades_retiro">
+
+                    <select id="select_ret_localidad" onchange="gestionarOtraLocalidad('ret')" style="width:100%; padding:8px; border:2px solid var(--azul); border-radius:4px;">
+    <option value="">-- Seleccioná Localidad --</option>
+    <option value="CABA">CABA</option>
+    <option value="Calchaqui">Calchaqui</option>
+    <option value="Corrientes">Corrientes</option>
+    <option value="Florencia">Florencia</option>
+    <option value="Gobernador Crespo">Gobernador Crespo</option>
+    <option value="Las Toscas">Las Toscas</option>
+    <option value="Malabrigo">Malabrigo</option>
+    <option value="Reconquista">Reconquista</option>
+    <option value="Resistencia">Resistencia</option>
+    <option value="Rosario">Rosario</option>
+    <option value="San Justo">San Justo</option>
+    <option value="Santa Fe">Santa Fe</option>
+    <option value="Vera">Vera</option>
+    <option value="Villa Ocampo">Villa Ocampo</option>
+    <option value="OTRA">✏️ OTRA (Escribir manualmente)</option>
+</select>
+<input type="text" id="ret_localidad_otra" placeholder="Escribí localidad..." style="display:none; width:100%; margin-top:5px; padding:8px; border:2px solid orange; border-radius:4px;">
+<input type="hidden" id="ret_localidad">
+                    
                     <label class="label-form">A pedido de (sucursal)</label>
                     <input type="text" id="ret_pedido_por" placeholder="Ej: SANTA FE">
                     <label class="label-form">Bultos aproximados</label>
