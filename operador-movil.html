@@ -1,3 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOULIN - Panel Operador</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #102a43 0%, #243b55 100%);
+            min-height: 100vh;
+        }
+        
+        /* LOGIN */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .login-card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 350px;
+        }
+        .login-card h2 {
+            color: #102a43;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .login-card input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        .login-card button {
+            width: 100%;
+            padding: 12px;
+            background: #38a169;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .login-card button:hover { background: #2f855a; }
+        .error { color: red; font-size: 14px; margin-top: 10px; display: none; text-align: center; }
+        
+        /* PANEL */
+        .panel-container {
+            display: none;
+            padding: 15px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .header h3 {
+            color: #102a43;
+            margin-bottom: 5px;
+        }
+        .header small {
+            color: #666;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            background: white;
+            border: 2px solid #1a4a7a;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #1a4a7a;
+        }
+        .tab-btn.active {
+            background: #1a4a7a;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .guia-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+        .guia-card:hover {
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .guia-num {
+            font-weight: bold;
+            color: #1a4a7a;
+            font-size: 16px;
+        }
+        .guia-fecha {
+            color: #666;
+            font-size: 12px;
+        }
+        .guia-destino {
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        .estado-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .estado-recibido { background: #fff3cd; color: #856404; }
+        .estado-deposito { background: #d1ecf1; color: #0c5460; }
+        .estado-reparto { background: #d4edda; color: #155724; }
+        .estado-entregado { background: #c3e6cb; color: #155724; }
+        .btn-salir {
+            width: 100%;
+            padding: 12px;
+            background: #e53e3e;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .btn-salir:hover { background: #c53030; }
+    </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-container" id="loginScreen">
+    <div class="login-card">
+        <h2>🚛 MOULIN</h2>
+        <p style="text-align:center; margin-bottom:20px; color:#666;">Panel Operador</p>
+        <input type="text" id="user" placeholder="Usuario">
+        <input type="password" id="pass" placeholder="Contraseña">
+        <button onclick="login()">INGRESAR</button>
+        <div id="errorMsg" class="error">Usuario o clave incorrectos</div>
+    </div>
+</div>
+
+<!-- PANEL -->
+<div class="panel-container" id="panelScreen">
+    <div class="header">
+        <h3 id="userName">Operador</h3>
+        <small id="userSucursal">Sucursal</small>
+    </div>
+    
+    <div class="tabs">
+        <button class="tab-btn active" onclick="cambiarTab('pendientes')">📋 Pendientes</button>
+        <button class="tab-btn" onclick="cambiarTab('historial')">📜 Historial</button>
+    </div>
+    
+    <div id="tab-pendientes" class="tab-content active">
+        <div id="listaPendientes"></div>
+    </div>
+    
+    <div id="tab-historial" class="tab-content">
+        <div id="listaHistorial"></div>
+    </div>
+    
+    <button class="btn-salir" onclick="salir()">SALIR</button>
+</div>
+
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
@@ -144,3 +335,6 @@ Pago en: ${g.pago_en}
         }
     });
 </script>
+
+</body>
+</html>
