@@ -335,9 +335,15 @@ window.limpiarFormulario = function () {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
-    document.getElementById('cuerpoItems').innerHTML = '';
+    
+    const cuerpoItems = document.getElementById('cuerpoItems');
+    if (cuerpoItems) cuerpoItems.innerHTML = '';
+    
     retiroAsociadoActual = null;
-    document.getElementById('aviso-retiro').style.display = 'none';
+    
+    const avisoRetiro = document.getElementById('aviso-retiro');
+    if (avisoRetiro) avisoRetiro.style.display = 'none';
+    
     agregarFila();
 };
 
