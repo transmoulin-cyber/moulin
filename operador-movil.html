@@ -1,0 +1,146 @@
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyCAsCocDQjimpjNo5l2oHTGO82XNTG7tzY",
+        authDomain: "transporte-moulin.firebaseapp.com",
+        databaseURL: "https://transporte-moulin-default-rtdb.firebaseio.com",
+        projectId: "transporte-moulin",
+        storageBucket: "transporte-moulin.firebasestorage.app",
+        messagingSenderId: "1022730425566",
+        appId: "1:1022730425566:web:1ec5b014b71d14ce579e4f"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let usuarioActual = null;
+    let guiasGlobal = [];
+
+    window.login = function() {
+        const uInput = document.getElementById('user').value.toLowerCase();
+        const pInput = document.getElementById('pass').value;
+        const error = document.getElementById('errorMsg');
+
+        const usuarios = [
+            { u: "admin", p: "moulin2024", nombre: "Administración", prefijo: "TODO" },
+            { u: "rosario", p: "moulinros", nombre: "Depósito Rosario", prefijo: "ROS" },
+            { u: "santafe", p: "moulinsfe", nombre: "Depósito Santa Fe", prefijo: "STAFE" },
+            { u: "recon", p: "moulinrec", nombre: "Depósito Reconquista", prefijo: "REC" },
+            { u: "bsas", p: "moulinbsas", nombre: "Depósito BSAS", prefijo: "BSAS" }
+        ];
+
+        const encontrado = usuarios.find(x => x.u === uInput && x.p === pInput);
+
+        if (encontrado) {
+            usuarioActual = encontrado;
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('panelScreen').style.display = 'block';
+            document.getElementById('userName').innerText = encontrado.nombre;
+            document.getElementById('userSucursal').innerText = encontrado.prefijo === 'TODO' ? 'Todas las sucursales' : encontrado.prefijo;
+            cargarGuias();
+        } else {
+            error.style.display = 'block';
+        }
+    };
+
+    window.cambiarTab = function(tab) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        event.target.classList.add('active');
+        document.getElementById(`tab-${tab}`).classList.add('active');
+    };
+
+    window.salir = function() {
+        usuarioActual = null;
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('panelScreen').style.display = 'none';
+        document.getElementById('user').value = '';
+        document.getElementById('pass').value = '';
+        document.getElementById('errorMsg').style.display = 'none';
+    };
+
+    function cargarGuias() {
+        onValue(ref(db, 'moulin/guias'), (snapshot) => {
+            guiasGlobal = [];
+            snapshot.forEach(child => {
+                const g = child.val();
+                g.firebaseID = child.key;
+                guiasGlobal.push(g);
+            });
+            renderizarListas();
+        });
+    }
+
+    function renderizarListas() {
+        const guiasFiltradas = guiasGlobal.filter(g => {
+            if (usuarioActual.prefijo === 'TODO') return true;
+            return g.num.startsWith(usuarioActual.prefijo) || g.d_l === usuarioActual.nombre.split(' ').pop();
+        });
+
+        // Pendientes
+        const pendientes = guiasFiltradas.filter(g => g.estado === 'recibido' || g.estado === 'deposito');
+        document.getElementById('listaPendientes').innerHTML = pendientes.length === 0 
+            ? '<p style="text-align:center; color:#666; padding:20px;">No hay guías pendientes</p>'
+            : pendientes.map(g => crearCard(g)).join('');
+
+        // Historial (últimas 50)
+        const historial = guiasFiltradas.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+        document.getElementById('listaHistorial').innerHTML = historial.length === 0
+            ? '<p style="text-align:center; color:#666; padding:20px;">No hay guías en el historial</p>'
+            : historial.map(g => crearCard(g)).join('');
+    }
+
+    function crearCard(g) {
+        const estadoClass = `estado-${g.estado}`;
+        const estadoText = g.estado.charAt(0).toUpperCase() + g.estado.slice(1);
+        return `
+            <div class="guia-card" onclick="verDetalle('${g.firebaseID}')">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="guia-num">${g.num}</span>
+                    <span class="guia-fecha">${g.fecha}</span>
+                </div>
+                <div class="guia-destino">
+                    <b>Destino:</b> ${g.d_n}<br>
+                    <small>${g.d_d} - ${g.d_l}</small>
+                </div>
+                <span class="estado-badge ${estadoClass}">${estadoText}</span>
+            </div>
+        `;
+    }
+
+    window.verDetalle = function(firebaseID) {
+        const g = guiasGlobal.find(x => x.firebaseID === firebaseID);
+        if (!g) return;
+        
+        alert(`
+GUIA: ${g.num}
+Fecha: ${g.fecha}
+Estado: ${g.estado}
+
+REMITENTE:
+${g.r_n}
+${g.r_d}
+${g.r_l}
+Tel: ${g.r_t}
+
+DESTINATARIO:
+${g.d_n}
+${g.d_d}
+${g.d_l}
+Tel: ${g.d_t}
+
+TOTAL: $${g.total}
+Condición: ${g.condicion}
+Pago en: ${g.pago_en}
+        `);
+    };
+
+    document.addEventListener('keypress', (e) => {
+        if(e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') {
+            login();
+        }
+    });
+</script>
