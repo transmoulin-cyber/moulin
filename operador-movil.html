@@ -78,6 +78,66 @@
         .header small {
             color: #666;
         }
+        
+        /* BOTÓN ESCANEAR */
+        .btn-escanear {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-escanear:active {
+            transform: scale(0.98);
+        }
+        
+        .separador {
+            text-align: center;
+            color: #999;
+            font-size: 11px;
+            margin: 5px 0;
+            position: relative;
+        }
+        .separador::before,
+        .separador::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 35%;
+            height: 1px;
+            background: #ddd;
+        }
+        .separador::before { left: 0; }
+        .separador::after { right: 0; }
+        
+        .busqueda-manual {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        .busqueda-manual input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #1a4a7a;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .busqueda-manual button {
+            padding: 10px 15px;
+            background: #1a4a7a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
         .tabs {
             display: flex;
             gap: 10px;
@@ -151,23 +211,6 @@
             margin-top: 20px;
         }
         .btn-salir:hover { background: #c53030; }
-                /* BOTÓN ESCANEAR */
-        .btn-escanear {
-            width: 100%;
-            padding: 18px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-        }
-        .btn-escanear:active {
-            transform: scale(0.98);
-        }
         
         /* MODALES */
         .modal-overlay {
@@ -270,24 +313,17 @@
         <h3 id="userName">Operador</h3>
         <small id="userSucursal">Sucursal</small>
     </div>
-        <!-- BOTÓN ESCANEAR -->
+    
+    <!-- BOTÓN ESCANEAR -->
     <button class="btn-escanear" onclick="iniciarEscaneo()">📷 ESCANEAR GUÍA</button>
     
-    <!-- MODAL ESCÁNER -->
-    <div id="modal-escaner" class="modal-overlay">
-        <div class="modal-content">
-            <h3 class="modal-titulo">📷 Escaneando...</h3>
-            <div id="reader"></div>
-            <button class="modal-btn modal-btn-rojo" onclick="detenerEscaneo()">❌ CANCELAR</button>
-        </div>
+    <div class="separador">o ingresá el número manualmente</div>
+    
+    <div class="busqueda-manual">
+        <input type="text" id="input-buscar-numero" placeholder="Ej: ROS-00125" onkeypress="if(event.key==='Enter') buscarPorNumeroManual()">
+        <button onclick="buscarPorNumeroManual()">🔍</button>
     </div>
     
-    <!-- MODAL ASIGNACIÓN -->
-    <div id="modal-asignacion" class="modal-overlay">
-        <div class="modal-content" id="asignacion-contenido">
-            <!-- Se llena dinámicamente -->
-        </div>
-    </div>
     <div class="tabs">
         <button class="tab-btn active" onclick="cambiarTab('pendientes')">📋 Pendientes</button>
         <button class="tab-btn" onclick="cambiarTab('historial')">📜 Historial</button>
@@ -304,9 +340,25 @@
     <button class="btn-salir" onclick="salir()">SALIR</button>
 </div>
 
+<!-- MODAL ESCÁNER -->
+<div id="modal-escaner" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="modal-titulo">📷 Escaneando...</h3>
+        <div id="reader"></div>
+        <button class="modal-btn modal-btn-rojo" onclick="detenerEscaneo()">❌ CANCELAR</button>
+    </div>
+</div>
+
+<!-- MODAL ASIGNACIÓN -->
+<div id="modal-asignacion" class="modal-overlay">
+    <div class="modal-content" id="asignacion-contenido">
+        <!-- Se llena dinámicamente -->
+    </div>
+</div>
+
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyCAsCocDQjimpjNo5l2oHTGO82XNTG7tzY",
@@ -323,7 +375,12 @@
 
     let usuarioActual = null;
     let guiasGlobal = [];
+    let repartidoresGlobal = [];
+    window.html5QrcodeScanner = null;
 
+    // ============================================
+    // LOGIN
+    // ============================================
     window.login = function() {
         const uInput = document.getElementById('user').value.toLowerCase();
         const pInput = document.getElementById('pass').value;
@@ -345,7 +402,7 @@
             document.getElementById('panelScreen').style.display = 'block';
             document.getElementById('userName').innerText = encontrado.nombre;
             document.getElementById('userSucursal').innerText = encontrado.prefijo === 'TODO' ? 'Todas las sucursales' : encontrado.prefijo;
-            cargarGuias();
+            cargarDatos();
         } else {
             error.style.display = 'block';
         }
@@ -368,7 +425,11 @@
         document.getElementById('errorMsg').style.display = 'none';
     };
 
-    function cargarGuias() {
+    // ============================================
+    // CARGAR DATOS
+    // ============================================
+    function cargarDatos() {
+        // Cargar guías
         onValue(ref(db, 'moulin/guias'), (snapshot) => {
             guiasGlobal = [];
             snapshot.forEach(child => {
@@ -378,21 +439,157 @@
             });
             renderizarListas();
         });
+        
+        // Cargar repartidores
+        onValue(ref(db, 'moulin/repartidores'), (snapshot) => {
+            repartidoresGlobal = [];
+            snapshot.forEach(child => {
+                const r = child.val();
+                r.firebaseID = child.key;
+                if (r.activo !== false && !r.eliminado) {
+                    repartidoresGlobal.push(r);
+                }
+            });
+        });
     }
 
+    // ============================================
+    // ESCÁNER QR
+    // ============================================
+    window.iniciarEscaneo = async () => {
+        const modal = document.getElementById('modal-escaner');
+        modal.style.display = 'flex';
+        
+        try {
+            window.html5QrcodeScanner = new Html5Qrcode("reader");
+            
+            await window.html5QrcodeScanner.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 }
+                },
+                (decodedText) => {
+                    detenerEscaneo();
+                    procesarNumero(decodedText);
+                },
+                (errorMessage) => {}
+            );
+        } catch (err) {
+            alert("❌ No se pudo acceder a la cámara: " + err);
+            modal.style.display = 'none';
+        }
+    };
+
+    window.detenerEscaneo = async () => {
+        if (window.html5QrcodeScanner) {
+            try {
+                await window.html5QrcodeScanner.stop();
+                window.html5QrcodeScanner.clear();
+            } catch (e) {}
+            window.html5QrcodeScanner = null;
+        }
+        document.getElementById('modal-escaner').style.display = 'none';
+    };
+
+    window.buscarPorNumeroManual = () => {
+        const input = document.getElementById('input-buscar-numero');
+        const numero = input.value.trim().toUpperCase();
+        if (!numero) {
+            alert("⚠️ Ingresá un número de guía");
+            return;
+        }
+        input.value = '';
+        procesarNumero(numero);
+    };
+
+    function procesarNumero(numero) {
+        numero = numero.trim().toUpperCase();
+        
+        const guia = guiasGlobal.find(g => 
+            (g.num || '').toUpperCase() === numero
+        );
+        
+        if (guia) {
+            mostrarModalAsignacion(guia);
+        } else {
+            alert("❌ No se encontró la guía: " + numero);
+        }
+    }
+
+    function mostrarModalAsignacion(g) {
+        const opcionesRepartidores = repartidoresGlobal
+            .map(r => `<option value="${r.nombre}">${r.nombre} (${r.sucursal})</option>`)
+            .join('');
+        
+        const html = `
+            <h3 class="modal-titulo">Asignar Repartidor</h3>
+            <div class="resultado-numero">${g.num}</div>
+            <div class="resultado-info">
+                <b>Cliente:</b> ${g.d_n}<br>
+                <b>Destino:</b> ${g.d_l}<br>
+                <b>Dirección:</b> ${g.d_d || 'No especificada'}<br>
+                <b>Bultos:</b> ${g.cant_t}<br>
+                <b>Total:</b> $${Number(g.total).toLocaleString('es-AR')}<br>
+                <b>Estado:</b> ${(g.estado || 'recibido').toUpperCase()}
+            </div>
+            <label style="font-weight:bold; margin-top:15px; display:block;">Seleccionar Repartidor:</label>
+            <select id="select-repartidor-asignar" class="select-repartidor">
+                <option value="">-- Seleccionar --</option>
+                ${opcionesRepartidores}
+            </select>
+            <button class="modal-btn modal-btn-verde" onclick="confirmarAsignacion('${g.firebaseID}')">✅ CONFIRMAR ASIGNACIÓN</button>
+            <button class="modal-btn modal-btn-gris" onclick="cerrarModalAsignacion()">CANCELAR</button>
+        `;
+        
+        document.getElementById('asignacion-contenido').innerHTML = html;
+        document.getElementById('modal-asignacion').style.display = 'flex';
+    }
+
+    window.confirmarAsignacion = async (firebaseID) => {
+        const select = document.getElementById('select-repartidor-asignar');
+        const repartidor = select.value;
+        
+        if (!repartidor) {
+            alert("⚠️ Seleccioná un repartidor");
+            return;
+        }
+        
+        if (!confirm(`¿Asignar esta guía a ${repartidor}?`)) return;
+        
+        try {
+            await update(ref(db, `moulin/guias/${firebaseID}`), {
+                asignado_a: repartidor,
+                estado: 'en_reparto',
+                fecha_asignacion: new Date().toLocaleString('es-AR'),
+                asignado_por: usuarioActual.nombre
+            });
+            
+            cerrarModalAsignacion();
+            alert("✅ Guía asignada correctamente");
+        } catch (e) {
+            alert("❌ Error: " + e.message);
+        }
+    };
+
+    window.cerrarModalAsignacion = () => {
+        document.getElementById('modal-asignacion').style.display = 'none';
+    };
+
+    // ============================================
+    // RENDERIZAR LISTAS
+    // ============================================
     function renderizarListas() {
         const guiasFiltradas = guiasGlobal.filter(g => {
             if (usuarioActual.prefijo === 'TODO') return true;
             return g.num.startsWith(usuarioActual.prefijo) || g.d_l === usuarioActual.nombre.split(' ').pop();
         });
 
-        // Pendientes
         const pendientes = guiasFiltradas.filter(g => g.estado === 'recibido' || g.estado === 'deposito');
         document.getElementById('listaPendientes').innerHTML = pendientes.length === 0 
             ? '<p style="text-align:center; color:#666; padding:20px;">No hay guías pendientes</p>'
             : pendientes.map(g => crearCard(g)).join('');
 
-        // Historial (últimas 50)
         const historial = guiasFiltradas.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
         document.getElementById('listaHistorial').innerHTML = historial.length === 0
             ? '<p style="text-align:center; color:#666; padding:20px;">No hay guías en el historial</p>'
