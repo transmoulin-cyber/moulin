@@ -284,9 +284,9 @@ if (btnEmitir) {
             num: nroGuia,
             fecha: new Date().toLocaleDateString('es-AR'),
             timestamp: Date.now(),
-            r_n, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value,
+            r_n, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value === 'OTRA' ? document.getElementById('r_l_otra').value : document.getElementById('r_l').value,
             r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value,
-            d_n, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value,
+            d_n, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value === 'OTRA' ? document.getElementById('d_l_otra').value : document.getElementById('d_l').value,
             d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value,
             flete: tot.flete.toFixed(2), seg: tot.seg.toFixed(2), total: tot.total.toFixed(2),
             v_decl: tot.v_decl.toFixed(2), cant_t: tot.cant_t,
@@ -391,7 +391,7 @@ function imprimir(g) {
                 </table>
                 <div style="display:flex; justify-content:space-between; margin-top:8px; font-weight:bold; font-size:14px;">
                     <div>BULTOS: ${g.cant_t} | ${g.condicion} | <span class="resaltado">${g.pago_en}</span></div>
-                    <div style="text-align:right;">Flete: $${g.flete} | Seg: $${g.seg} | <span style="font-size:18px;">TOTAL: $${g.total}</span></div>
+                   <div style="text-align:right;">Flete: $${g.flete} | V.Dec: $${g.v_decl} | Seg: $${g.seg} | <span style="font-size:18px;">TOTAL: $${g.total}</span></div>
                 </div>
                 <div style="margin-top:auto; text-align:right;">
                     <div style="border-top:1px solid #000; width:200px; text-align:center; margin-left:auto; font-size:11px;">Firma y Aclaración Receptor</div>
