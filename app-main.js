@@ -274,6 +274,19 @@ if (btnEmitir) {
         const d_n = document.getElementById('d_n').value.trim();
         if (!r_n || !d_n) return alert("⚠️ Faltan datos de clientes.");
 
+        // Obtener y validar localidad remitente
+const r_l_select = document.getElementById('select_r_l').value;
+const r_l_final = r_l_select === 'OTRA' ? document.getElementById('r_l_otra').value.trim() : r_l_select;
+
+// Obtener y validar localidad destinatario
+const d_l_select = document.getElementById('select_d_l').value;
+const d_l_final = d_l_select === 'OTRA' ? document.getElementById('d_l_otra').value.trim() : d_l_select;
+
+if (!r_l_select) return alert("⚠️ Seleccioná la localidad del remitente.");
+if (!d_l_select) return alert("⚠️ Seleccioná la localidad del destinatario.");
+if (r_l_select === 'OTRA' && !r_l_final) return alert("⚠️ Ingresá la localidad del remitente en el campo 'OTRA'.");
+if (d_l_select === 'OTRA' && !d_l_final) return alert("⚠️ Ingresá la localidad del destinatario en el campo 'OTRA'.");
+
         const tot = calcularTotales();
         if (tot.cant_t === 0) return alert("⚠️ Debes agregar al menos un bulto.");
 
@@ -284,9 +297,9 @@ if (btnEmitir) {
             num: nroGuia,
             fecha: new Date().toLocaleDateString('es-AR'),
             timestamp: Date.now(),
-            r_n, r_d: document.getElementById('r_d').value, r_l: document.getElementById('r_l').value === 'OTRA' ? document.getElementById('r_l_otra').value : document.getElementById('r_l').value,
+           r_n, r_d: document.getElementById('r_d').value, r_l: r_l_final,
             r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value,
-            d_n, d_d: document.getElementById('d_d').value, d_l: document.getElementById('d_l').value === 'OTRA' ? document.getElementById('d_l_otra').value : document.getElementById('d_l').value,
+            d_n, d_d: document.getElementById('d_d').value, d_l: d_l_final,
             d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value,
             flete: tot.flete.toFixed(2), seg: tot.seg.toFixed(2), total: tot.total.toFixed(2),
             v_decl: tot.v_decl.toFixed(2), cant_t: tot.cant_t,
