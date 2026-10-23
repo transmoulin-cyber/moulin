@@ -522,51 +522,74 @@ window.reimprimir = (num) => {
 };
 
 
-/// ============================================
-// EXCEL GUÍAS (Optimizado con anchos y formato prolijo)
+// ============================================
+// EXCEL GUÍAS (Optimizado, Resumido y con Título Superior)
 // ============================================
 window.descargarExcel = () => {
     if (!window.datosParaExcel || !window.datosParaExcel.length) {
         return alert("No hay datos para exportar.");
     }
 
-    const resumen = window.datosParaExcel.map(g => ({
-        'N° Guía': g.num || '', 
-        'Retiro Asociado': g.retiro_asociado || '', 
-        'Fecha': g.fecha || '',
-        'Remitente': g.r_n || '', 
-        'Tel. Remitente': g.r_t || '', 
-        'Dirección Origen': g.r_d || '', 
-        'Localidad Origen': g.r_l || '',
-        'Destinatario': g.d_n || '', 
-        'Tel. Destinatario': g.d_t || '', 
-        'Dirección Destino': g.d_d || '', 
-        'Localidad Destino': g.d_l || '',
-        'Cant. Bultos': Number(g.cant_t || 0), 
-        'Flete': Number(g.flete || 0), 
-        'Seguro': Number(g.seg || 0),
-        'TOTAL': Number(g.total || 0), 
-        'Pago en': g.pago_en || '', 
-        'Condición': g.condicion || '',
-        'Estado': g.estado?.toUpperCase() || '', 
-        'Operador': g.emisor || ''
-    }));
+    // Obtenemos la localidad seleccionada en el filtro de la pantalla
+    const selectLoc = document.getElementById('f_localidad');
+    const localidadNombre = selectLoc ? selectLoc.options[selectLoc.selectedIndex].text : "Todas";
 
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(resumen);
-
-    // Definimos anchos amplios para que ninguna columna se corte ni muestre "###"
-    ws['!cols'] = [
-        {wch: 16}, {wch: 16}, {wch: 12}, {wch: 28}, {wch: 16}, 
-        {wch: 32}, {wch: 22}, {wch: 28}, {wch: 16}, {wch: 32}, 
-        {wch: 22}, {wch: 14}, {wch: 14}, {wch: 14}, {wch: 16}, 
-        {wch: 20}, {wch: 14}, {wch: 14}, {wch: 18}
+    
+    // 1. Array bidimensional para armar la hoja con título superior personalizado
+    const wsData = [
+        [`Remitos con destino: ${localidadNombre}`], // Fila 1: Título superior
+        [], // Fila 2: Espacio en blanco
+        // Fila 3: Encabezados en el orden exacto que pediste
+        [
+            'Fecha', 
+            'Nº de Guía', 
+            'Localidad Origen', 
+            'Remitente', 
+            'Destinatario', 
+            'Pago', 
+            'Condición', 
+            'Total ($)'
+        ]
     ];
 
-    XLSX.utils.book_append_sheet(wb, ws, "Guías");
+    // 2. Mapeo de los datos respetando el orden y acortando el texto de pago
+    window.datosParaExcel.forEach(g => {
+        // Convierte "PAGO EN ORIGEN" o "PAGO EN DESTINO" en "ORIGEN" o "DESTINO"
+        let pagoCorto = g.pago_en || '';
+        if (pagoCorto.toUpperCase().includes('ORIGEN')) pagoCorto = 'ORIGEN';
+        if (pagoCorto.toUpperCase().includes('DESTINO')) pagoCorto = 'DESTINO';
+
+        wsData.push([
+            g.fecha || '',
+            g.num || '',
+            g.r_l || '',
+            g.r_n || '',
+            g.d_n || '',
+            pagoCorto,
+            g.condicion || '',
+            Number(g.total || 0)
+        ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // 3. Anchos de columna optimizados para impresión horizontal y control de caja
+    ws['!cols'] = [
+        {wch: 12}, // Fecha
+        {wch: 16}, // Nº de Guía
+        {wch: 18}, // Localidad Origen
+        {wch: 28}, // Remitente
+        {wch: 28}, // Destinatario
+        {wch: 12}, // Pago (ORIGEN / DESTINO)
+        {wch: 12}, // Condición
+        {wch: 14}  // Total ($)
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Control de Caja");
     
     const fechaStr = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `Moulin_Guias_${fechaStr}.xlsx`);
+    XLSX.writeFile(wb, `Control_Rendicion_${fechaStr}.xlsx`);
 };
 
 // ============================================
