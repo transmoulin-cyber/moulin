@@ -1106,7 +1106,7 @@ window.ejecutarExportar = () => {
         fechaHasta = new Date(hasta).getTime() + 86400000; // +1 día
     }
     
-    // Filtrar guías y pagos
+    // Filtrar guías y pagos en el rango de fechas
     const guias = window.historialGlobal.filter(g => {
         if (g.condicion !== 'CTA CTE') return false;
         const clienteGuia = g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n;
@@ -1117,54 +1117,107 @@ window.ejecutarExportar = () => {
         p.cliente === nombre && p.timestamp >= fechaDesde && p.timestamp <= fechaHasta
     );
     
-    // Calcular saldo anterior
+    // Calcular saldo anterior antes del período seleccionado
     const cierresCliente = window.cierresGlobal
         .filter(c => c.cliente === nombre && c.timestamp < fechaDesde)
         .sort((a, b) => b.timestamp - a.timestamp);
     const saldoAnterior = cierresCliente[0]?.saldoFinal || 0;
-    
-    // Crear Excel
-    const data = [];
-    
-    // Encabezado
-    data.push({ Concepto: 'SALDO ANTERIOR', Detalle: '', Monto: saldoAnterior });
-    data.push({ Concepto: '', Detalle: '', Monto: '' });
-    
-    // Guías
-    data.push({ Concepto: 'GUÍAS', Detalle: '', Monto: '' });
-    guias.forEach(g => {
-        data.push({
-            Concepto: 'Guía',
-            Detalle: `${g.num} - ${g.fecha} - ${g.r_l} → ${g.d_l}`,
-            Monto: Number(g.total)
-        });
-    });
-    data.push({ Concepto: '', Detalle: '', Monto: '' });
-    
-    // Pagos
-    data.push({ Concepto: 'PAGOS', Detalle: '', Monto: '' });
-    pagos.forEach(p => {
-        data.push({
-            Concepto: 'Pago',
-            Detalle: `${p.fecha} - ${p.tipo} - ${p.observaciones || ''}`,
-            Monto: -Number(p.monto)
-        });
-    });
-    data.push({ Concepto: '', Detalle: '', Monto: '' });
-    
-    // Saldo final
-    const totalGuias = guias.reduce((sum, g) => sum + Number(g.total || 0), 0);
-    const totalPagos = pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0);
-    const saldoFinal = saldoAnterior + totalGuias - totalPagos;
-    data.push({ Concepto: 'SALDO ACTUAL', Detalle: '', Monto: saldoFinal });
-    
+
+    // Combinar y ordenar cronológicamente guías y pagos
+    const movimientos = [
+        ...guias.map(g => ({ ...g, tipoMovimiento: 'GUIA', timestampMov: g.timestamp })),
+        ...pagos.map(p => ({ ...p, tipoMovimiento: 'PAGO', timestampMov: p.timestamp }))
+    ].sort((a, b) => a.timestampMov - b.timestampMov);
+
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{wch:20}, {wch:50}, {wch:15}];
+    
+    // 1. Cabecera con TÍTULO SUPERIOR (Punto 1)
+    const wsData = [
+        [`ESTADO DE CUENTA CORRIENTE: ${nombre.toUpperCase()}`],
+        [`Fecha de Emisión: ${new Date().toLocaleDateString('es-AR')}`],
+        [], // Espacio en blanco
+        // Encabezados limpios sin la columna "Guía" redundante (Punto 3)
+        [
+            'Fecha', 
+            'Nº Remito', 
+            'Contraparte (De / Para)', 
+            'Ruta', 
+            'Debe ($)', 
+            'Haber ($)', 
+            'Saldo ($)'
+        ]
+    ];
+
+    // Fila inicial con el Saldo Anterior
+    let saldoAcumulado = saldoAnterior;
+    wsData.push([
+        '-', 
+        '-', 
+        'SALDO ANTERIOR / PERÍODO ANTERIOR', 
+        '-', 
+        0, 
+        0, 
+        saldoAcumulado
+    ]);
+
+    // 2. Mapeo con la contraparte correcta (Punto 2)
+    movimientos.forEach(m => {
+        if (m.tipoMovimiento === 'GUIA') {
+            const esRemitente = (m.r_n || '').toLowerCase().trim() === nombre.toLowerCase().trim();
+            const contraparte = esRemitente ? `Para: ${m.d_n || '-'}` : `De: ${m.r_n || '-'}`;
+            
+            const debe = Number(m.total || 0);
+            saldoAcumulado += debe;
+
+            wsData.push([
+                m.fecha || '',
+                m.num || '',
+                contraparte,
+                `${m.r_l || ''} → ${m.d_l || ''}`,
+                debe,
+                0,
+                saldoAcumulado
+            ]);
+        } else if (m.tipoMovimiento === 'PAGO') {
+            const haber = Number(m.monto || 0);
+            saldoAcumulado -= haber;
+
+            wsData.push([
+                m.fecha || '',
+                '-',
+                `PAGO (${m.tipo || 'EFECTIVO'}) - ${m.observaciones || ''}`,
+                'Caja / Sucursal',
+                0,
+                haber,
+                saldoAcumulado
+            ]);
+        }
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // 3. Anchos de columna y formato apaisado
+    ws['!cols'] = [
+        {wch: 12}, // Fecha
+        {wch: 16}, // Nº Remito
+        {wch: 32}, // Contraparte (De / Para)
+        {wch: 22}, // Ruta
+        {wch: 15}, // Debe ($)
+        {wch: 15}, // Haber ($)
+        {wch: 16}  // Saldo ($)
+    ];
+
+    ws['!pageSetup'] = {
+        orientation: 'landscape',
+        fitToWidth: 1,
+        fitToHeight: 0
+    };
+
     XLSX.utils.book_append_sheet(wb, ws, "Cuenta Corriente");
     
-    const fecha = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `CC_${nombre.replace(/\s+/g, '_')}_${fecha}.xlsx`);
+    const clienteLimpio = nombre.replace(/[^a-zA-Z0-9]/g, "_");
+    const fechaStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `CC_${clienteLimpio}_${fechaStr}.xlsx`);
     
     cerrarModalExportar();
 };
