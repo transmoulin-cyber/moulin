@@ -523,7 +523,7 @@ window.reimprimir = (num) => {
 
 
 // ============================================
-// EXCEL GUÍAS (Optimizado, Resumido y con Título Superior)
+// EXCEL GUÍAS (Ajustado para 1 Sola Hoja Apaisada / Horizontal)
 // ============================================
 window.descargarExcel = () => {
     if (!window.datosParaExcel || !window.datosParaExcel.length) {
@@ -536,11 +536,10 @@ window.descargarExcel = () => {
 
     const wb = XLSX.utils.book_new();
     
-    // 1. Array bidimensional para armar la hoja con título superior personalizado
+    // 1. Array bidimensional con el título y las columnas ordenadas
     const wsData = [
         [`Remitos con destino: ${localidadNombre}`], // Fila 1: Título superior
         [], // Fila 2: Espacio en blanco
-        // Fila 3: Encabezados en el orden exacto que pediste
         [
             'Fecha', 
             'Nº de Guía', 
@@ -553,9 +552,8 @@ window.descargarExcel = () => {
         ]
     ];
 
-    // 2. Mapeo de los datos respetando el orden y acortando el texto de pago
+    // 2. Mapeo de datos (Texto de Pago acortado a ORIGEN / DESTINO)
     window.datosParaExcel.forEach(g => {
-        // Convierte "PAGO EN ORIGEN" o "PAGO EN DESTINO" en "ORIGEN" o "DESTINO"
         let pagoCorto = g.pago_en || '';
         if (pagoCorto.toUpperCase().includes('ORIGEN')) pagoCorto = 'ORIGEN';
         if (pagoCorto.toUpperCase().includes('DESTINO')) pagoCorto = 'DESTINO';
@@ -574,24 +572,30 @@ window.descargarExcel = () => {
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    // 3. Anchos de columna optimizados para impresión horizontal y control de caja
+    // 3. Anchos ajustados a la medida justa para ahorrar espacio de impresión
     ws['!cols'] = [
-        {wch: 12}, // Fecha
-        {wch: 16}, // Nº de Guía
-        {wch: 18}, // Localidad Origen
-        {wch: 28}, // Remitente
-        {wch: 28}, // Destinatario
-        {wch: 12}, // Pago (ORIGEN / DESTINO)
-        {wch: 12}, // Condición
-        {wch: 14}  // Total ($)
+        {wch: 11}, // Fecha
+        {wch: 13}, // Nº de Guía
+        {wch: 15}, // Localidad Origen
+        {wch: 22}, // Remitente
+        {wch: 22}, // Destinatario
+        {wch: 10}, // Pago
+        {wch: 11}, // Condición
+        {wch: 12}  // Total ($)
     ];
+
+    // 4. Configuración de Impresión: APAISADO (Horizontal) + 1 Hoja de Ancho
+    ws['!pageSetup'] = {
+        orientation: 'landscape', // Hoja Apaisada / Horizontal
+        fitToWidth: 1,            // Forzar a que entre en 1 sola página de ancho
+        fitToHeight: 0            // Dejar que las filas bajen libremente a lo largo
+    };
 
     XLSX.utils.book_append_sheet(wb, ws, "Control de Caja");
     
     const fechaStr = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, `Control_Rendicion_${fechaStr}.xlsx`);
 };
-
 // ============================================
 // RETIROS - FORMULARIO
 // ============================================
