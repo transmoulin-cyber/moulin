@@ -521,24 +521,52 @@ window.reimprimir = (num) => {
     if (g) imprimir(g); else alert("Guía no encontrada.");
 };
 
-// ============================================
-// EXCEL GUÍAS
+
+/// ============================================
+// EXCEL GUÍAS (Optimizado con anchos y formato prolijo)
 // ============================================
 window.descargarExcel = () => {
-    if (!window.datosParaExcel.length) return alert("No hay datos para exportar.");
+    if (!window.datosParaExcel || !window.datosParaExcel.length) {
+        return alert("No hay datos para exportar.");
+    }
+
     const resumen = window.datosParaExcel.map(g => ({
-        'N° Guía': g.num, 'Retiro Asociado': g.retiro_asociado || '', 'Fecha': g.fecha,
-        'Remitente': g.r_n, 'Tel. Remitente': g.r_t, 'Dirección Origen': g.r_d, 'Localidad Origen': g.r_l,
-        'Destinatario': g.d_n, 'Tel. Destinatario': g.d_t, 'Dirección Destino': g.d_d, 'Localidad Destino': g.d_l,
-        'Cant. Bultos': g.cant_t, 'Flete': Number(g.flete || 0), 'Seguro': Number(g.seg || 0),
-        'TOTAL': Number(g.total || 0), 'Pago en': g.pago_en, 'Condición': g.condicion,
-        'Estado': g.estado?.toUpperCase() || '', 'Operador': g.emisor || ''
+        'N° Guía': g.num || '', 
+        'Retiro Asociado': g.retiro_asociado || '', 
+        'Fecha': g.fecha || '',
+        'Remitente': g.r_n || '', 
+        'Tel. Remitente': g.r_t || '', 
+        'Dirección Origen': g.r_d || '', 
+        'Localidad Origen': g.r_l || '',
+        'Destinatario': g.d_n || '', 
+        'Tel. Destinatario': g.d_t || '', 
+        'Dirección Destino': g.d_d || '', 
+        'Localidad Destino': g.d_l || '',
+        'Cant. Bultos': Number(g.cant_t || 0), 
+        'Flete': Number(g.flete || 0), 
+        'Seguro': Number(g.seg || 0),
+        'TOTAL': Number(g.total || 0), 
+        'Pago en': g.pago_en || '', 
+        'Condición': g.condicion || '',
+        'Estado': g.estado?.toUpperCase() || '', 
+        'Operador': g.emisor || ''
     }));
+
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(resumen);
-    ws['!cols'] = [{wch:15},{wch:15},{wch:12},{wch:25},{wch:15},{wch:30},{wch:20},{wch:25},{wch:15},{wch:30},{wch:20},{wch:10},{wch:12},{wch:12},{wch:12},{wch:18},{wch:12},{wch:12},{wch:15}];
+
+    // Definimos anchos amplios para que ninguna columna se corte ni muestre "###"
+    ws['!cols'] = [
+        {wch: 16}, {wch: 16}, {wch: 12}, {wch: 28}, {wch: 16}, 
+        {wch: 32}, {wch: 22}, {wch: 28}, {wch: 16}, {wch: 32}, 
+        {wch: 22}, {wch: 14}, {wch: 14}, {wch: 14}, {wch: 16}, 
+        {wch: 20}, {wch: 14}, {wch: 14}, {wch: 18}
+    ];
+
     XLSX.utils.book_append_sheet(wb, ws, "Guías");
-    XLSX.writeFile(wb, `Moulin_Guias_${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+    const fechaStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `Moulin_Guias_${fechaStr}.xlsx`);
 };
 
 // ============================================
