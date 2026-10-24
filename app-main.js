@@ -91,23 +91,35 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
     }
 });
 
-// --- CLIENTES ---
+// --- CLIENTES (Corregido para recuperar el nombre desde la clave de Firebase) ---
 onValue(ref(db, 'moulin/clientes'), (snapshot) => {
     const data = snapshot.val();
-    window.clientesGlobal = data ? Object.values(data) : [];
+    window.clientesGlobal = data ? Object.entries(data).map(([key, val]) => {
+        // Recuperamos el nombre ya sea de la propiedad interna o de la clave de Firebase
+        let nombreReal = val.nombre || val.n || key.replace(/_/g, ' ');
+        return {
+            nombre: nombreReal.toUpperCase(),
+            direccion: val.direccion || val.d || '',
+            localidad: val.localidad || val.l || '',
+            telefono: val.telefono || val.t || '',
+            cbu: val.cbu || val.alias || ''
+        };
+    }) : [];
 
     const listaDL = document.getElementById('lista_clientes');
     if (listaDL) {
         listaDL.innerHTML = window.clientesGlobal
-            .filter(c => c.nombre || c.n)
-            .map(c => `<option value="${c.nombre || c.n}">`)
+            .filter(c => c.nombre)
+            .map(c => `<option value="${c.nombre}">`)
             .join('');
     }
 
     const badge = document.getElementById('badge-clientes');
     if (badge) badge.innerText = window.clientesGlobal.length;
 
-    renderTablaClientes();
+    if (typeof renderTablaClientes === 'function') {
+        renderTablaClientes();
+    }
 });
 
 // --- RETIROS ---
