@@ -309,9 +309,11 @@ window.calcularTotales = function () {
     return { flete, seg, total, v_decl: vdecl, cant_t };
 };
 
+
 // ============================================
-// EMISIÓN DE GUÍA
+// EMISIÓN DE GUÍA (Corregida y Optimizada)
 // ============================================
+
 const btnEmitir = document.getElementById('btn-emitir');
 if (btnEmitir) {
     btnEmitir.onclick = async () => {
@@ -320,17 +322,17 @@ if (btnEmitir) {
         if (!r_n || !d_n) return alert("⚠️ Faltan datos de clientes.");
 
         // Obtener y validar localidad remitente
-const r_l_select = document.getElementById('select_r_l').value;
-const r_l_final = r_l_select === 'OTRA' ? document.getElementById('r_l_otra').value.trim() : r_l_select;
+        const r_l_select = document.getElementById('select_r_l').value;
+        const r_l_final = r_l_select === 'OTRA' ? document.getElementById('r_l_otra').value.trim() : r_l_select;
 
-// Obtener y validar localidad destinatario
-const d_l_select = document.getElementById('select_d_l').value;
-const d_l_final = d_l_select === 'OTRA' ? document.getElementById('d_l_otra').value.trim() : d_l_select;
+        // Obtener y validar localidad destinatario
+        const d_l_select = document.getElementById('select_d_l').value;
+        const d_l_final = d_l_select === 'OTRA' ? document.getElementById('d_l_otra').value.trim() : d_l_select;
 
-if (!r_l_select) return alert("⚠️ Seleccioná la localidad del remitente.");
-if (!d_l_select) return alert("⚠️ Seleccioná la localidad del destinatario.");
-if (r_l_select === 'OTRA' && !r_l_final) return alert("⚠️ Ingresá la localidad del remitente en el campo 'OTRA'.");
-if (d_l_select === 'OTRA' && !d_l_final) return alert("⚠️ Ingresá la localidad del destinatario en el campo 'OTRA'.");
+        if (!r_l_select) return alert("⚠️ Seleccioná la localidad del remitente.");
+        if (!d_l_select) return alert("⚠️ Seleccioná la localidad del destinatario.");
+        if (r_l_select === 'OTRA' && !r_l_final) return alert("⚠️ Ingresá la localidad del remitente en el campo 'OTRA'.");
+        if (d_l_select === 'OTRA' && !d_l_final) return alert("⚠️ Ingresá la localidad del destinatario en el campo 'OTRA'.");
 
         const tot = calcularTotales();
         if (tot.cant_t === 0) return alert("⚠️ Debes agregar al menos un bulto.");
@@ -342,7 +344,7 @@ if (d_l_select === 'OTRA' && !d_l_final) return alert("⚠️ Ingresá la locali
             num: nroGuia,
             fecha: new Date().toLocaleDateString('es-AR'),
             timestamp: Date.now(),
-           r_n, r_d: document.getElementById('r_d').value, r_l: r_l_final,
+            r_n, r_d: document.getElementById('r_d').value, r_l: r_l_final,
             r_t: document.getElementById('r_t').value, r_cbu: document.getElementById('r_cbu').value,
             d_n, d_d: document.getElementById('d_d').value, d_l: d_l_final,
             d_t: document.getElementById('d_t').value, d_cbu: document.getElementById('d_cbu').value,
@@ -363,26 +365,28 @@ if (d_l_select === 'OTRA' && !d_l_final) return alert("⚠️ Ingresá la locali
             }))
         };
 
-        // 🔹 GUARDAR AUTOMÁTICAMENTE REMITENTE Y DESTINATARIO NUEVOS EN FIREBASE
-        const guardarClienteDirecto = async (nombre, dir, loc, tel, cbu) => {
-            if (!nombre || !nombre.trim()) return;
-            const key = nombre.trim().toUpperCase().replace(/[.#$/[\]]/g, "_");
-            await set(ref(db, `moulin/clientes/${key}`), {
-                nombre: nombre.trim().toUpperCase(),
-                direccion: dir || '',
-                localidad: loc || '',
-                telefono: tel || '',
-                cbu: cbu || '',
-                ultimaActualizacion: Date.now()
-            });
-        };
-
-        await guardarClienteDirecto(r_n, document.getElementById('r_d').value, r_l_final, document.getElementById('r_t').value, document.getElementById('r_cbu').value);
-        await guardarClienteDirecto(d_n, document.getElementById('d_d').value, d_l_final, document.getElementById('d_t').value, document.getElementById('d_cbu').value);
         try {
+            // 1. Guardar la guía en la nube
             await set(ref(db, `moulin/guias/${idU}`), guia);
 
-            // Si viene de un retiro, marcarlo como realizado
+            // 2. Guardar automáticamente Remitente y Destinatario en la base de datos de clientes
+            const guardarCliente = async (nombre, dir, loc, tel, cbu) => {
+                if (!nombre || !nombre.trim()) return;
+                const key = nombre.trim().toUpperCase().replace(/[.#$/[\]]/g, "_");
+                await set(ref(db, `moulin/clientes/${key}`), {
+                    nombre: nombre.trim().toUpperCase(),
+                    direccion: dir || '',
+                    localidad: loc || '',
+                    telefono: tel || '',
+                    cbu: cbu || '',
+                    ultimaActualizacion: Date.now()
+                });
+            };
+
+            await guardarCliente(r_n, document.getElementById('r_d').value, r_l_final, document.getElementById('r_t').value, document.getElementById('r_cbu').value);
+            await guardarCliente(d_n, document.getElementById('d_d').value, d_l_final, document.getElementById('d_t').value, document.getElementById('d_cbu').value);
+
+            // 3. Si viene de un retiro, marcarlo como realizado
             if (retiroAsociadoActual) {
                 const retiro = window.retirosGlobal.find(r => r.num_retiro === retiroAsociadoActual);
                 if (retiro) {
@@ -403,24 +407,6 @@ if (d_l_select === 'OTRA' && !d_l_final) return alert("⚠️ Ingresá la locali
         }
     };
 }
-
-window.limpiarFormulario = function () {
-    ['r_n', 'r_t', 'r_d', 'r_l', 'r_cbu', 'd_n', 'd_t', 'd_d', 'd_l', 'd_cbu', 'cr_monto'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
-    
-    const cuerpoItems = document.getElementById('cuerpoItems');
-    if (cuerpoItems) cuerpoItems.innerHTML = '';
-    
-    retiroAsociadoActual = null;
-    
-    const avisoRetiro = document.getElementById('aviso-retiro');
-    if (avisoRetiro) avisoRetiro.style.display = 'none';
-    
-    agregarFila();
-};
-
 // ============================================
 // IMPRESIÓN
 // ============================================
