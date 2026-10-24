@@ -363,6 +363,22 @@ if (d_l_select === 'OTRA' && !d_l_final) return alert("⚠️ Ingresá la locali
             }))
         };
 
+        // 🔹 GUARDAR AUTOMÁTICAMENTE REMITENTE Y DESTINATARIO NUEVOS EN FIREBASE
+        const guardarClienteDirecto = async (nombre, dir, loc, tel, cbu) => {
+            if (!nombre || !nombre.trim()) return;
+            const key = nombre.trim().toUpperCase().replace(/[.#$/[\]]/g, "_");
+            await set(ref(db, `moulin/clientes/${key}`), {
+                nombre: nombre.trim().toUpperCase(),
+                direccion: dir || '',
+                localidad: loc || '',
+                telefono: tel || '',
+                cbu: cbu || '',
+                ultimaActualizacion: Date.now()
+            });
+        };
+
+        await guardarClienteDirecto(r_n, document.getElementById('r_d').value, r_l_final, document.getElementById('r_t').value, document.getElementById('r_cbu').value);
+        await guardarClienteDirecto(d_n, document.getElementById('d_d').value, d_l_final, document.getElementById('d_t').value, document.getElementById('d_cbu').value);
         try {
             await set(ref(db, `moulin/guias/${idU}`), guia);
 
