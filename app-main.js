@@ -91,37 +91,60 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
     }
 });
 
-// --- CLIENTES (Corregido para recuperar el nombre desde la clave de Firebase) ---
-onValue(ref(db, 'moulin/clientes'), (snapshot) => {
-    const data = snapshot.val();
-    window.clientesGlobal = data ? Object.entries(data).map(([key, val]) => {
-        // Recuperamos el nombre ya sea de la propiedad interna o de la clave de Firebase
-        let nombreReal = val.nombre || val.n || key.replace(/_/g, ' ');
-        return {
-            nombre: nombreReal.toUpperCase(),
-            direccion: val.direccion || val.d || '',
-            localidad: val.localidad || val.l || '',
-            telefono: val.telefono || val.t || '',
-            cbu: val.cbu || val.alias || ''
-        };
-    }) : [];
+// ============================================
+// AUTOCOMPLETADO DE CLIENTES (Seguro y Robusto)
+// ============================================
+window.completarCliente = (tipo) => {
+    const inputElem = document.getElementById(`${tipo}_n`);
+    if (!inputElem) return;
+    
+    const valorBuscado = inputElem.value.trim().toLowerCase();
+    if (!valorBuscado) return;
 
-    const listaDL = document.getElementById('lista_clientes');
-    if (listaDL) {
-        listaDL.innerHTML = window.clientesGlobal
-            .filter(c => c.nombre)
-            .map(c => `<option value="${c.nombre}">`)
-            .join('');
+    // Buscamos en la lista global de clientes
+    const cliente = window.clientesGlobal.find(c => {
+        const nombreCliente = (c.nombre || c.n || '').trim().toLowerCase();
+        return nombreCliente === valorBuscado || nombreCliente.includes(valorBuscado);
+    });
+
+    if (cliente) {
+        console.log("Cliente encontrado para autocompletar:", cliente);
+        
+        // Rellenamos los campos tolerando tanto nombres cortos (d, l, t) como largos (direccion, localidad, telefono)
+        const dir = cliente.direccion || cliente.d || '';
+        const loc = cliente.localidad || cliente.l || '';
+        const tel = cliente.telefono || cliente.t || '';
+        const cbuVal = cliente.cbu || cliente.alias || '';
+
+        document.getElementById(`${tipo}_d`).value = dir;
+        
+        // Si tiene localidad, intentamos setearla en el selector o input correspondiente
+        const selectLoc = document.getElementById(`select_${tipo}_l`);
+        if (selectLoc) {
+            // Verificamos si la localidad existe en las opciones del select
+            let encontrada = false;
+            for (let opt of selectLoc.options) {
+                if (opt.value.toUpperCase() === loc.toUpperCase()) {
+                    selectLoc.value = opt.value;
+                    encontrada = true;
+                    break;
+                }
+            }
+            if (!encontrada && loc) {
+                selectLoc.value = 'OTRA';
+                window.gestionarOtraLocalidad(tipo);
+                const inputOtra = document.getElementById(`${tipo}_l_otra`);
+                if (inputOtra) inputOtra.value = loc;
+            }
+        } else {
+            const inputLoc = document.getElementById(`${tipo}_l`);
+            if (inputLoc) inputLoc.value = loc;
+        }
+
+        document.getElementById(`${tipo}_t`).value = tel;
+        document.getElementById(`${tipo}_cbu`).value = cbuVal;
     }
-
-    const badge = document.getElementById('badge-clientes');
-    if (badge) badge.innerText = window.clientesGlobal.length;
-
-    if (typeof renderTablaClientes === 'function') {
-        renderTablaClientes();
-    }
-});
-
+};
 // --- RETIROS ---
 onValue(ref(db, 'moulin/retiros'), (snapshot) => {
     const data = snapshot.val();
