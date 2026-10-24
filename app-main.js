@@ -151,21 +151,31 @@ function puedeVerRetiro(r) {
 }
 
 // ============================================
-// AUTOCOMPLETADO DE CLIENTES
+// AUTOCOMPLETADO DE CLIENTES (Con depuración)
 // ============================================
 window.completarCliente = (tipo) => {
-    const n = document.getElementById(`${tipo}_n`).value.trim();
-    const cliente = window.clientesGlobal.find(c =>
-        (c.nombre || c.n || '').toLowerCase() === n.toLowerCase()
-    );
+    const inputElem = document.getElementById(`${tipo}_n`);
+    if (!inputElem) return;
+    
+    const n = inputElem.value.trim().toLowerCase();
+    console.log("Buscando cliente:", n);
+    console.log("Clientes disponibles en memoria:", window.clientesGlobal);
+
+    const cliente = window.clientesGlobal.find(c => {
+        const nombreCliente = (c.nombre || c.n || '').trim().toLowerCase();
+        return nombreCliente === n;
+    });
+
     if (cliente) {
+        console.log("¡Cliente encontrado!", cliente);
         document.getElementById(`${tipo}_d`).value = cliente.direccion || cliente.d || '';
         document.getElementById(`${tipo}_l`).value = cliente.localidad || cliente.l || '';
         document.getElementById(`${tipo}_t`).value = cliente.telefono || cliente.t || '';
         document.getElementById(`${tipo}_cbu`).value = cliente.cbu || cliente.alias || '';
+    } else {
+        console.log("No se encontró el cliente exacto en la lista global.");
     }
 };
-
 // ============================================
 // GESTIÓN DE LOCALIDADES (SELECTOR + OTRA)
 // ============================================
@@ -523,7 +533,7 @@ window.reimprimir = (num) => {
 
 
 // ============================================
-// EXCEL GUÍAS (Apaisado, Anchos Compactos y Letra Tamaño 10)
+// EXCEL GUÍAS (Anchos compactos y orientación apaisada optimizada)
 // ============================================
 window.descargarExcel = () => {
     if (!window.datosParaExcel || !window.datosParaExcel.length) {
@@ -569,38 +579,25 @@ window.descargarExcel = () => {
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    // Anchos compactos exactos para que NO excedan el ancho de 1 hoja A4
+    // Anchos compactos y justos para que no sobre espacio y entre perfecto en hoja apaisada
     ws['!cols'] = [
-        {wch: 10}, // Fecha
-        {wch: 12}, // Nº de Guía
-        {wch: 14}, // Localidad Origen
-        {wch: 18}, // Remitente
-        {wch: 18}, // Destinatario
-        {wch: 9},  // Pago
-        {wch: 10}, // Condición
-        {wch: 11}  // Total ($)
+        {wch: 11}, // Fecha
+        {wch: 14}, // Nº de Guía
+        {wch: 16}, // Localidad Origen
+        {wch: 22}, // Remitente
+        {wch: 22}, // Destinatario
+        {wch: 10}, // Pago
+        {wch: 11}, // Condición
+        {wch: 12}  // Total ($)
     ];
 
-    // Fuerza impresión horizontal (Apaisado) + Escala ajustada a 1 hoja de ancho
+    // Configuración nativa para impresión horizontal (Apaisado)
     ws['!pageSetup'] = {
         orientation: 'landscape',
         paperSize: 9, // A4
-        scale: 90,   // Ajusta el zoom de impresión al 90% para garantizar que entre
         fitToWidth: 1,
         fitToHeight: 0
     };
-
-    // Aplicar estilo de fuente tamaño 10 a todas las celdas
-    const range = XLSX.utils.decode_range(ws['!ref']);
-    for (let R = range.s.r; R <= range.e.r; ++R) {
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-            const cell_address = { c: C, r: R };
-            const cell_ref = XLSX.utils.encode_cell(cell_address);
-            if (!ws[cell_ref]) continue;
-            if (!ws[cell_ref].s) ws[cell_ref].s = {};
-            ws[cell_ref].s.font = { name: "Calibri", sz: 10 };
-        }
-    }
 
     XLSX.utils.book_append_sheet(wb, ws, "Control de Caja");
     
