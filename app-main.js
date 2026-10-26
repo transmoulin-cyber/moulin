@@ -324,12 +324,13 @@ window.calcularTotales = function () {
 
 
 // ============================================
-// EMISIÓN DE GUÍA (Corregida y Optimizada)
+// EMISIÓN DE GUÍA (Con control total de guardado)
 // ============================================
-
 const btnEmitir = document.getElementById('btn-emitir');
 if (btnEmitir) {
     btnEmitir.onclick = async () => {
+        console.log("🚨 ¡ENTRÓ AL EVENTO DE EMITIR GUÍA NUESTRO!"); // <-- Esto tiene que salir sí o sí en la consola
+
         const r_n = document.getElementById('r_n').value.trim();
         const d_n = document.getElementById('d_n').value.trim();
         if (!r_n || !d_n) return alert("⚠️ Faltan datos de clientes.");
@@ -378,42 +379,32 @@ if (btnEmitir) {
             }))
         };
 
-try {
+        try {
             // 1. Guardar la guía en la nube
+            console.log("⏳ Guardando guía en Firebase...");
             await set(ref(db, `moulin/guias/${idU}`), guia);
-            console.log("✅ Guía guardada con éxito en moulin/guias/" + idU);
+            console.log("✅ ¡Guía guardada con éxito!");
 
-            // 2. Guardar automáticamente Remitente y Destinatario con depuración en consola
-            const guardarCliente = async (tipoLabel, nombre, dir, loc, tel, cbu) => {
-                if (!nombre || !nombre.trim()) {
-                    console.log(`⚠️ El ${tipoLabel} está vacío, no se guarda.`);
-                    return;
-                }
-                
+            // 2. GUARDAR CLIENTES DIRECTAMENTE (Forzado)
+            const guardarClienteForzado = async (nombre, dir, loc, tel, cbu) => {
+                if (!nombre || !nombre.trim()) return;
                 const key = nombre.trim().toUpperCase().replace(/[.#$/[\]]/g, "_");
                 const ruta = `moulin/clientes/${key}`;
+                console.log("💾 Guardando cliente en ruta:", ruta);
                 
-                console.log(`🔍 Intentando guardar ${tipoLabel} en ruta:`, ruta);
-                
-                const datosCliente = {
+                await set(ref(db, ruta), {
                     nombre: nombre.trim().toUpperCase(),
                     direccion: dir || '',
                     localidad: loc || '',
                     telefono: tel || '',
                     cbu: cbu || '',
                     ultimaActualizacion: Date.now()
-                };
-
-                try {
-                    await set(ref(db, ruta), datosCliente);
-                    console.log(`🎉 ¡${tipoLabel} (${nombre}) guardado con éxito en Firebase!`);
-                } catch (errCliente) {
-                    console.error(`❌ ERROR al guardar el ${tipoLabel} en Firebase:`, errCliente);
-                }
+                });
+                console.log("🎉 ¡Cliente guardado con éxito en Firebase!");
             };
 
-            await guardarCliente("Remitente", r_n, document.getElementById('r_d').value, r_l_final, document.getElementById('r_t').value, document.getElementById('r_cbu').value);
-            await guardarCliente("Destinatario", d_n, document.getElementById('d_d').value, d_l_final, document.getElementById('d_t').value, document.getElementById('d_cbu').value);
+            await guardarClienteForzado(r_n, document.getElementById('r_d').value, r_l_final, document.getElementById('r_t').value, document.getElementById('r_cbu').value);
+            await guardarClienteForzado(d_n, document.getElementById('d_d').value, d_l_final, document.getElementById('d_t').value, document.getElementById('d_cbu').value);
 
             // 3. Si viene de un retiro, marcarlo como realizado
             if (retiroAsociadoActual) {
@@ -432,7 +423,8 @@ try {
             limpiarFormulario();
             proximoNumero++;
         } catch (e) {
-            alert("❌ Error general al guardar: " + e.message);
+            console.error("❌ ERROR CRÍTICO AL GUARDAR:", e);
+            alert("❌ Error al guardar: " + e.message);
         }
     };
 }
