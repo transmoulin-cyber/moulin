@@ -91,11 +91,11 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
     }
 });
 
-// --- CLIENTES (Lectura en tiempo real y Autocompletado) ---
+// --- CLIENTES (Lectura en tiempo real y Autocompletado Unificado) ---
 onValue(ref(db, 'moulin/clientes'), (snapshot) => {
     const data = snapshot.val();
     window.clientesGlobal = data ? Object.entries(data).map(([key, val]) => ({
-        nombre: (val.nombre || key.replace(/_/g, ' ')).toUpperCase(),
+        nombre: (val.nombre || val.n || key.replace(/_/g, ' ')).toUpperCase().trim(),
         direccion: val.direccion || val.d || '',
         localidad: val.localidad || val.l || '',
         telefono: val.telefono || val.t || '',
