@@ -378,26 +378,42 @@ if (btnEmitir) {
             }))
         };
 
-        try {
+try {
             // 1. Guardar la guía en la nube
             await set(ref(db, `moulin/guias/${idU}`), guia);
+            console.log("✅ Guía guardada con éxito en moulin/guias/" + idU);
 
-            // 2. Guardar automáticamente Remitente y Destinatario en la base de datos de clientes
-            const guardarCliente = async (nombre, dir, loc, tel, cbu) => {
-                if (!nombre || !nombre.trim()) return;
+            // 2. Guardar automáticamente Remitente y Destinatario con depuración en consola
+            const guardarCliente = async (tipoLabel, nombre, dir, loc, tel, cbu) => {
+                if (!nombre || !nombre.trim()) {
+                    console.log(`⚠️ El ${tipoLabel} está vacío, no se guarda.`);
+                    return;
+                }
+                
                 const key = nombre.trim().toUpperCase().replace(/[.#$/[\]]/g, "_");
-                await set(ref(db, `moulin/clientes/${key}`), {
+                const ruta = `moulin/clientes/${key}`;
+                
+                console.log(`🔍 Intentando guardar ${tipoLabel} en ruta:`, ruta);
+                
+                const datosCliente = {
                     nombre: nombre.trim().toUpperCase(),
                     direccion: dir || '',
                     localidad: loc || '',
                     telefono: tel || '',
                     cbu: cbu || '',
                     ultimaActualizacion: Date.now()
-                });
+                };
+
+                try {
+                    await set(ref(db, ruta), datosCliente);
+                    console.log(`🎉 ¡${tipoLabel} (${nombre}) guardado con éxito en Firebase!`);
+                } catch (errCliente) {
+                    console.error(`❌ ERROR al guardar el ${tipoLabel} en Firebase:`, errCliente);
+                }
             };
 
-            await guardarCliente(r_n, document.getElementById('r_d').value, r_l_final, document.getElementById('r_t').value, document.getElementById('r_cbu').value);
-            await guardarCliente(d_n, document.getElementById('d_d').value, d_l_final, document.getElementById('d_t').value, document.getElementById('d_cbu').value);
+            await guardarCliente("Remitente", r_n, document.getElementById('r_d').value, r_l_final, document.getElementById('r_t').value, document.getElementById('r_cbu').value);
+            await guardarCliente("Destinatario", d_n, document.getElementById('d_d').value, d_l_final, document.getElementById('d_t').value, document.getElementById('d_cbu').value);
 
             // 3. Si viene de un retiro, marcarlo como realizado
             if (retiroAsociadoActual) {
@@ -416,7 +432,7 @@ if (btnEmitir) {
             limpiarFormulario();
             proximoNumero++;
         } catch (e) {
-            alert("❌ Error al guardar: " + e.message);
+            alert("❌ Error general al guardar: " + e.message);
         }
     };
 }
