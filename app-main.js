@@ -90,6 +90,81 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
         console.error("Error en listener guías:", e);
     }
 });
+
+// --- CLIENTES (Lectura en tiempo real y Autocompletado) ---
+onValue(ref(db, 'moulin/clientes'), (snapshot) => {
+    const data = snapshot.val();
+    window.clientesGlobal = data ? Object.entries(data).map(([key, val]) => ({
+        nombre: (val.nombre || key.replace(/_/g, ' ')).toUpperCase(),
+        direccion: val.direccion || val.d || '',
+        localidad: val.localidad || val.l || '',
+        telefono: val.telefono || val.t || '',
+        cbu: val.cbu || val.alias || ''
+    })) : [];
+
+    const listaDL = document.getElementById('lista_clientes');
+    if (listaDL) {
+        listaDL.innerHTML = window.clientesGlobal
+            .filter(c => c.nombre)
+            .map(c => `<option value="${c.nombre}">`)
+            .join('');
+    }
+
+    const badge = document.getElementById('badge-clientes');
+    if (badge) badge.innerText = window.clientesGlobal.length;
+
+    if (typeof renderTablaClientes === 'function') {
+        renderTablaClientes();
+    }
+});
+
+// Función de autocompletado inteligente (Global)
+window.completarCliente = (tipo) => {
+    const inputElem = document.getElementById(`${tipo}_n`);
+    if (!inputElem) return;
+    
+    const valorBuscado = inputElem.value.trim().toLowerCase();
+    if (!valorBuscado) return;
+
+    const cliente = window.clientesGlobal.find(c => {
+        const nombreC = (c.nombre || '').trim().toLowerCase();
+        return nombreC === valorBuscado || nombreC.includes(valorBuscado);
+    });
+
+    if (cliente) {
+        console.log("¡Cliente encontrado y autocompletado con éxito!", cliente);
+        
+        document.getElementById(`${tipo}_d`).value = cliente.direccion || '';
+        
+        // Manejo de localidad (selector o input 'OTRA')
+        const selectLoc = document.getElementById(`select_${tipo}_l`);
+        const locVal = cliente.localidad || '';
+        if (selectLoc && locVal) {
+            let encontrada = false;
+            for (let opt of selectLoc.options) {
+                if (opt.value.toUpperCase() === locVal.toUpperCase()) {
+                    selectLoc.value = opt.value;
+                    encontrada = true;
+                    break;
+                }
+            }
+            if (!encontrada) {
+                selectLoc.value = 'OTRA';
+                if (typeof window.gestionarOtraLocalidad === 'function') {
+                    window.gestionarOtraLocalidad(tipo);
+                }
+                const inputOtra = document.getElementById(`${tipo}_l_otra`);
+                if (inputOtra) inputOtra.value = locVal;
+            }
+        } else {
+            const inputLoc = document.getElementById(`${tipo}_l`);
+            if (inputLoc) inputLoc.value = locVal;
+        }
+
+        document.getElementById(`${tipo}_t`).value = cliente.telefono || '';
+        document.getElementById(`${tipo}_cbu`).value = cliente.cbu || '';
+    }
+};
 // ============================================
 // LIMPIAR FORMULARIO (Global)
 // ============================================
