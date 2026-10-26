@@ -92,59 +92,52 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
 });
 
 // ============================================
-// AUTOCOMPLETADO DE CLIENTES (Seguro y Robusto)
+// AUTOCOMPLETADO DE CLIENTES
 // ============================================
 window.completarCliente = (tipo) => {
     const inputElem = document.getElementById(`${tipo}_n`);
     if (!inputElem) return;
     
-    const valorBuscado = inputElem.value.trim().toLowerCase();
-    if (!valorBuscado) return;
+    const n = inputElem.value.trim().toLowerCase();
+    if (!n) return;
 
-    // Buscamos en la lista global de clientes
     const cliente = window.clientesGlobal.find(c => {
-        const nombreCliente = (c.nombre || c.n || '').trim().toLowerCase();
-        return nombreCliente === valorBuscado || nombreCliente.includes(valorBuscado);
+        const nombreCliente = (c.nombre || '').trim().toLowerCase();
+        return nombreCliente === n || nombreCliente.includes(n);
     });
 
     if (cliente) {
-        console.log("Cliente encontrado para autocompletar:", cliente);
+        console.log("¡Cliente autocompletado con éxito!", cliente);
+        document.getElementById(`${tipo}_d`).value = cliente.direccion || '';
         
-        // Rellenamos los campos tolerando tanto nombres cortos (d, l, t) como largos (direccion, localidad, telefono)
-        const dir = cliente.direccion || cliente.d || '';
-        const loc = cliente.localidad || cliente.l || '';
-        const tel = cliente.telefono || cliente.t || '';
-        const cbuVal = cliente.cbu || cliente.alias || '';
-
-        document.getElementById(`${tipo}_d`).value = dir;
-        
-        // Si tiene localidad, intentamos setearla en el selector o input correspondiente
+        // Manejo inteligente de la localidad (selector o input 'OTRA')
         const selectLoc = document.getElementById(`select_${tipo}_l`);
-        if (selectLoc) {
-            // Verificamos si la localidad existe en las opciones del select
+        const locVal = cliente.localidad || '';
+        if (selectLoc && locVal) {
             let encontrada = false;
             for (let opt of selectLoc.options) {
-                if (opt.value.toUpperCase() === loc.toUpperCase()) {
+                if (opt.value.toUpperCase() === locVal.toUpperCase()) {
                     selectLoc.value = opt.value;
                     encontrada = true;
                     break;
                 }
             }
-            if (!encontrada && loc) {
+            if (!encontrada) {
                 selectLoc.value = 'OTRA';
                 window.gestionarOtraLocalidad(tipo);
                 const inputOtra = document.getElementById(`${tipo}_l_otra`);
-                if (inputOtra) inputOtra.value = loc;
+                if (inputOtra) inputOtra.value = locVal;
             }
         } else {
             const inputLoc = document.getElementById(`${tipo}_l`);
-            if (inputLoc) inputLoc.value = loc;
+            if (inputLoc) inputLoc.value = locVal;
         }
 
-        document.getElementById(`${tipo}_t`).value = tel;
-        document.getElementById(`${tipo}_cbu`).value = cbuVal;
+        document.getElementById(`${tipo}_t`).value = cliente.telefono || '';
+        document.getElementById(`${tipo}_cbu`).value = cliente.cbu || '';
     }
 };
+
 // --- RETIROS ---
 onValue(ref(db, 'moulin/retiros'), (snapshot) => {
     const data = snapshot.val();
