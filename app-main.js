@@ -90,7 +90,27 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
         console.error("Error en listener guías:", e);
     }
 });
-
+// ============================================
+// LIMPIAR FORMULARIO (Global)
+// ============================================
+window.limpiarFormulario = function () {
+    ['r_n', 'r_t', 'r_d', 'r_l', 'r_cbu', 'd_n', 'd_t', 'd_d', 'd_l', 'd_cbu', 'cr_monto'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    
+    const cuerpoItems = document.getElementById('cuerpoItems');
+    if (cuerpoItems) cuerpoItems.innerHTML = '';
+    
+    window.retiroAsociadoActual = null;
+    
+    const avisoRetiro = document.getElementById('aviso-retiro');
+    if (avisoRetiro) avisoRetiro.style.display = 'none';
+    
+    if (typeof agregarFila === 'function') {
+        agregarFila();
+    }
+};
 // ============================================
 // AUTOCOMPLETADO DE CLIENTES
 // ============================================
