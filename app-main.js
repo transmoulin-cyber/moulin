@@ -193,19 +193,20 @@ window.completarCliente = (tipo) => {
     const inputElem = document.getElementById(`${tipo}_n`);
     if (!inputElem) return;
     
-    const n = inputElem.value.trim().toLowerCase();
-    if (!n) return;
+    const valorBuscado = inputElem.value.trim().toLowerCase();
+    if (!valorBuscado) return;
 
     const cliente = window.clientesGlobal.find(c => {
-        const nombreCliente = (c.nombre || '').trim().toLowerCase();
-        return nombreCliente === n || nombreCliente.includes(n);
+        const nombreC = (c.nombre || '').trim().toLowerCase();
+        return nombreC === valorBuscado || nombreC.includes(valorBuscado);
     });
 
     if (cliente) {
-        console.log("¡Cliente autocompletado con éxito!", cliente);
+        console.log("¡Cliente encontrado y autocompletado con éxito!", cliente);
+        
         document.getElementById(`${tipo}_d`).value = cliente.direccion || '';
         
-        // Manejo inteligente de la localidad (selector o input 'OTRA')
+        // Manejo de localidad (selector o input 'OTRA')
         const selectLoc = document.getElementById(`select_${tipo}_l`);
         const locVal = cliente.localidad || '';
         if (selectLoc && locVal) {
@@ -219,7 +220,9 @@ window.completarCliente = (tipo) => {
             }
             if (!encontrada) {
                 selectLoc.value = 'OTRA';
-                window.gestionarOtraLocalidad(tipo);
+                if (typeof window.gestionarOtraLocalidad === 'function') {
+                    window.gestionarOtraLocalidad(tipo);
+                }
                 const inputOtra = document.getElementById(`${tipo}_l_otra`);
                 if (inputOtra) inputOtra.value = locVal;
             }
