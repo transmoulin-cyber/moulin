@@ -1610,7 +1610,7 @@ if (document.getElementById('add-item')) {
 }
 
 // ============================================
-// IMPRESIÓN APAISADA ULTRA-COMPACTA (1 SOLA PÁGINA)
+// IMPRESIÓN APAISADA MÁXIMA COMPRESIÓN (39 FILAS POR HOJA)
 // ============================================
 window.imprimirHistorialApaisado = function() {
     const datosAImprimir = window.datosParaExcel; 
@@ -1636,18 +1636,18 @@ window.imprimirHistorialApaisado = function() {
         <head>
             <title>Planilla de Auditoría - Moulin</title>
             <style>
-                @page { size: A4 landscape; margin: 5mm; }
-                body { font-family: Arial, sans-serif; font-size: 9px; color: #333; margin: 0; padding: 0; }
-                h2 { text-align: center; margin: 0 0 2px 0; color: #1a4a7a; font-size: 12px; }
-                p { text-align: center; margin: 0 0 5px 0; font-size: 9px; color: #666; }
+                @page { size: A4 landscape; margin: 4mm; }
+                body { font-family: Arial, sans-serif; font-size: 8px; color: #333; margin: 0; padding: 0; }
+                h2 { text-align: center; margin: 0 0 1px 0; color: #1a4a7a; font-size: 11px; }
+                p { text-align: center; margin: 0 0 3px 0; font-size: 8px; color: #666; }
                 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-                /* Forzamos alto mínimo cero y padding mínimo para achicar las filas al máximo */
+                /* Altura ultra reducida para alcanzar las 39 filas por hoja */
                 th, td { 
-                    padding: 2px 4px !important; 
-                    height: 12px !important; 
-                    max-height: 12px !important; 
+                    padding: 1px 3px !important; 
+                    height: 10px !important; 
+                    max-height: 10px !important; 
                     border: 1px solid #aaa; 
-                    font-size: 9px; 
+                    font-size: 8px; 
                     overflow: hidden; 
                     white-space: nowrap; 
                     text-overflow: ellipsis; 
