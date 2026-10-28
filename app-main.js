@@ -1610,29 +1610,25 @@ if (document.getElementById('add-item')) {
 }
 
 // ============================================
-// IMPRESIÓN APAISADA COMPACTA (1 SOLA PÁGINA)
+// IMPRESIÓN APAISADA ULTRA-COMPACTA (1 SOLA PÁGINA)
 // ============================================
 window.imprimirHistorialApaisado = function() {
-    const contenidoTablaOriginal = document.getElementById('listaHistorial');
-    
-    if (!contenidoTablaOriginal || contenidoTablaOriginal.innerHTML.trim() === "") {
+    const datosAImprimir = window.datosParaExcel; 
+
+    if (!datosAImprimir || datosAImprimir.length === 0) {
         alert("⚠️ No hay datos en el historial para imprimir con este filtro.");
         return;
     }
 
-    const tablaClonada = contenidoTablaOriginal.cloneNode(true);
-    const filas = tablaClonada.querySelectorAll('tr');
-
-    filas.forEach(fila => {
-        const celdas = fila.querySelectorAll('td, th');
-        if (celdas.length >= 7) {
-            celdas[6].remove(); // Elimina Estado
-            celdas[1].remove(); // Elimina Retiro
-            if (celdas.length >= 8) {
-                celdas[7]?.remove(); // Elimina botones sueltos
-            }
-        }
-    });
+    const filasHTML = datosAImprimir.map(g => `
+        <tr>
+            <td><b>${g.num || ''}</b></td>
+            <td>${g.fecha || ''}</td>
+            <td>${g.r_n || ''} > ${g.d_n || ''}</td>
+            <td>$${Number(g.total || 0).toLocaleString('es-AR')}</td>
+            <td>${g.asignado_a || '-'}</td>
+        </tr>
+    `).join('');
 
     const ventanaImpresion = window.open('', '_blank', 'width=1000,height=700');
     ventanaImpresion.document.write(`
@@ -1640,16 +1636,24 @@ window.imprimirHistorialApaisado = function() {
         <head>
             <title>Planilla de Auditoría - Moulin</title>
             <style>
-                @page { size: A4 landscape; margin: 8mm; }
-                body { font-family: Arial, sans-serif; font-size: 10px; color: #333; margin: 0; padding: 5px; }
-                h2 { text-align: center; margin: 0 0 3px 0; color: #1a4a7a; font-size: 14px; }
-                p { text-align: center; margin: 0 0 8px 0; font-size: 10px; color: #666; }
-                table { width: 100%; border-collapse: collapse; }
-                /* Celdas súper compactas para que entren más filas por hoja */
-                th { background: #1a4a7a; color: white; padding: 3px 5px; border: 1px solid #000; font-size: 10px; text-align: left; }
-                td { padding: 3px 5px; border: 1px solid #ccc; font-size: 10px; vertical-align: middle; line-height: 1.1; }
-                button { display: none !important; }
-                select { border: none; font-size: 10px; background: transparent; font-family: inherit; padding: 0; }
+                @page { size: A4 landscape; margin: 5mm; }
+                body { font-family: Arial, sans-serif; font-size: 9px; color: #333; margin: 0; padding: 0; }
+                h2 { text-align: center; margin: 0 0 2px 0; color: #1a4a7a; font-size: 12px; }
+                p { text-align: center; margin: 0 0 5px 0; font-size: 9px; color: #666; }
+                table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+                /* Forzamos alto mínimo cero y padding mínimo para achicar las filas al máximo */
+                th, td { 
+                    padding: 2px 4px !important; 
+                    height: 12px !important; 
+                    max-height: 12px !important; 
+                    border: 1px solid #aaa; 
+                    font-size: 9px; 
+                    overflow: hidden; 
+                    white-space: nowrap; 
+                    text-overflow: ellipsis; 
+                    line-height: 1; 
+                }
+                th { background: #1a4a7a; color: white; font-weight: bold; }
             </style>
         </head>
         <body>
@@ -1658,15 +1662,15 @@ window.imprimirHistorialApaisado = function() {
             <table>
                 <thead>
                     <tr>
-                        <th>Guía</th>
-                        <th>Fecha</th>
-                        <th>Ruta (Origen > Destino)</th>
-                        <th>Total</th>
-                        <th>Repartidor</th>
+                        <th style="width: 15%;">Guía</th>
+                        <th style="width: 12%;">Fecha</th>
+                        <th style="width: 48%;">Ruta (Origen > Destino)</th>
+                        <th style="width: 12%;">Total</th>
+                        <th style="width: 13%;">Repartidor</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${tablaClonada.innerHTML}
+                    ${filasHTML}
                 </tbody>
             </table>
             <script>
