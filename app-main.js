@@ -1610,7 +1610,7 @@ if (document.getElementById('add-item')) {
 }
 
 // ============================================
-// IMPRESIÓN APAISADA - PUNTO JUSTO (39 FILAS CÓMODAS)
+// IMPRESIÓN APAISADA - TAMAÑO IDEAL (39 FILAS)
 // ============================================
 window.imprimirHistorialApaisado = function() {
     const datosAImprimir = window.datosParaExcel; 
@@ -1636,18 +1636,18 @@ window.imprimirHistorialApaisado = function() {
         <head>
             <title>Planilla de Auditoría - Moulin</title>
             <style>
-                @page { size: A4 landscape; margin: 6mm; }
-                body { font-family: Arial, sans-serif; font-size: 9px; color: #333; margin: 0; padding: 0; }
-                h2 { text-align: center; margin: 0 0 2px 0; color: #1a4a7a; font-size: 12px; }
-                p { text-align: center; margin: 0 0 5px 0; font-size: 9px; color: #666; }
+                @page { size: A4 landscape; margin: 10mm; }
+                body { font-family: Arial, sans-serif; font-size: 11px; color: #333; margin: 0; padding: 0; }
+                h2 { text-align: center; margin: 0 0 5px 0; color: #1a4a7a; font-size: 14px; }
+                p { text-align: center; margin: 0 0 10px 0; font-size: 11px; color: #666; }
                 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-                /* Altura intermedia y fuente de 9px para una lectura clara pero compacta */
+                /* Celdas con tamaño legible y altura justa para 39 filas por hoja */
                 th, td { 
-                    padding: 3px 5px !important; 
-                    height: 14px !important; 
-                    max-height: 14px !important; 
-                    border: 1px solid #aaa; 
-                    font-size: 9px; 
+                    padding: 5px 8px !important; 
+                    height: 18px !important; 
+                    max-height: 18px !important; 
+                    border: 1px solid #bbb; 
+                    font-size: 11px; 
                     overflow: hidden; 
                     white-space: nowrap; 
                     text-overflow: ellipsis; 
@@ -1683,4 +1683,5 @@ window.imprimirHistorialApaisado = function() {
         </html>
     `);
     ventanaImpresion.document.close();
+};
 };
