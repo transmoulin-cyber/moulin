@@ -377,3 +377,33 @@ textarea { width: 98%; }
 .saldo-cero { color: var(--verde); font-weight: bold; }
 .guia-cerrada { opacity: 0.5; text-decoration: line-through; }
 .badge-cerrado { background: #999; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+
+/* --- FORMATO APAISADO (LANDSCAPE) PARA IMPRESIÓN --- */
+@media print {
+    @page {
+        size: landscape;
+        margin: 10mm;
+    }
+}
+
+/* --- ANCHO REDUCIDO PARA COLUMNAS DE PAGO Y CONDICIONES EN HISTORIAL --- */
+/* Limita el ancho de las columnas del medio hacia la derecha en la tabla del historial */
+.tabla-items th:nth-child(5), 
+.tabla-items td:nth-child(5),
+.tabla-items th:nth-child(6), 
+.tabla-items td:nth-child(6),
+.tabla-items th:nth-child(7), 
+.tabla-items td:nth-child(7) {
+    max-width: 90px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+/* Achica los selects de repartidor y estado dentro de la tabla */
+.tabla-items select {
+    max-width: 110px;
+    font-size: 11px;
+    padding: 3px;
+}
