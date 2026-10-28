@@ -23,7 +23,6 @@ const db = getDatabase(app);
 const sesion = JSON.parse(sessionStorage.getItem('moulin_sesion'));
 if (!sesion) {
     alert("No hay sesión activa");
-    // Usa el nombre del archivo actual para redirigir
     window.location.href = window.location.pathname.split('/').pop();
 }
 
@@ -31,7 +30,7 @@ const PREFIJO_BASE = (sesion.prefijo || "RECON").toUpperCase();
 const PREFIJO = (["TODO", "ADM", "REC"].includes(PREFIJO_BASE)) ? "RECON" : PREFIJO_BASE;
 const NOMBRE_OP = sesion.nombre || "Operador";
 const ES_ADMIN = ["TODO", "ADM"].includes(PREFIJO_BASE);
-const NOMBRE_SUCURSAL = PREFIJO_BASE; // Nombre de la sucursal actual
+const NOMBRE_SUCURSAL = PREFIJO_BASE;
 
 const PRECIOS_BASE = { "Bulto": 20000, "Pallet": 200000, "Sobre": 17000, "Caja": 20000 };
 
@@ -41,11 +40,12 @@ const PRECIOS_BASE = { "Bulto": 20000, "Pallet": 200000, "Sobre": 17000, "Caja":
 window.historialGlobal = [];
 window.clientesGlobal = [];
 window.retirosGlobal = [];
+window.repartidoresGlobal = [];
 window.filtroEstadoActual = 'todos';
 window.datosParaExcel = [];
 let proximoNumero = 1001;
 let proximoRetiro = 1;
-let retiroAsociadoActual = null; // Guarda el retiro que se está convirtiendo en guía
+let retiroAsociadoActual = null;
 
 // ============================================
 // TABS
@@ -91,7 +91,7 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
     }
 });
 
-// --- CLIENTES (Lectura en tiempo real y Autocompletado Unificado) ---
+// --- CLIENTES ---
 onValue(ref(db, 'moulin/clientes'), (snapshot) => {
     const data = snapshot.val();
     window.clientesGlobal = data ? Object.entries(data).map(([key, val]) => ({
@@ -118,74 +118,48 @@ onValue(ref(db, 'moulin/clientes'), (snapshot) => {
     }
 });
 
-// Función de autocompletado inteligente (Global)
-window.completarCliente = (tipo) => {
-    const inputElem = document.getElementById(`${tipo}_n`);
-    if (!inputElem) return;
-    
-    const valorBuscado = inputElem.value.trim().toLowerCase();
-    if (!valorBuscado) return;
+// --- REPARTIDORES ---
+onValue(ref(db, 'moulin/repartidores'), (snapshot) => {
+    const data = snapshot.val();
+    window.repartidoresGlobal = data ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })) : [];
+    window.renderHistorial();
+});
 
-    const cliente = window.clientesGlobal.find(c => {
-        const nombreC = (c.nombre || '').trim().toLowerCase();
-        return nombreC === valorBuscado || nombreC.includes(valorBuscado);
-    });
+// --- RETIROS ---
+onValue(ref(db, 'moulin/retiros'), (snapshot) => {
+    const data = snapshot.val();
+    window.retirosGlobal = data
+        ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })).reverse()
+        : [];
 
-    if (cliente) {
-        console.log("¡Cliente encontrado y autocompletado con éxito!", cliente);
-        
-        document.getElementById(`${tipo}_d`).value = cliente.direccion || '';
-        
-        // Manejo de localidad (selector o input 'OTRA')
-        const selectLoc = document.getElementById(`select_${tipo}_l`);
-        const locVal = cliente.localidad || '';
-        if (selectLoc && locVal) {
-            let encontrada = false;
-            for (let opt of selectLoc.options) {
-                if (opt.value.toUpperCase() === locVal.toUpperCase()) {
-                    selectLoc.value = opt.value;
-                    encontrada = true;
-                    break;
-                }
-            }
-            if (!encontrada) {
-                selectLoc.value = 'OTRA';
-                if (typeof window.gestionarOtraLocalidad === 'function') {
-                    window.gestionarOtraLocalidad(tipo);
-                }
-                const inputOtra = document.getElementById(`${tipo}_l_otra`);
-                if (inputOtra) inputOtra.value = locVal;
-            }
-        } else {
-            const inputLoc = document.getElementById(`${tipo}_l`);
-            if (inputLoc) inputLoc.value = locVal;
-        }
+    const numsRetiro = window.retirosGlobal
+        .map(r => {
+            if (!r.num_retiro) return 0;
+            const partes = r.num_retiro.split('-');
+            return partes.length >= 3 ? parseInt(partes[2]) || 0 : 0;
+        })
+        .filter(n => !isNaN(n));
+    proximoRetiro = numsRetiro.length > 0 ? Math.max(...numsRetiro) + 1 : 1;
 
-        document.getElementById(`${tipo}_t`).value = cliente.telefono || '';
-        document.getElementById(`${tipo}_cbu`).value = cliente.cbu || '';
+    const pendientesVisibles = window.retirosGlobal.filter(r =>
+        r.estado === 'pendiente' && puedeVerRetiro(r)
+    );
+    const badge = document.getElementById('badge-retiros');
+    if (badge) {
+        badge.innerText = pendientesVisibles.length;
+        badge.style.display = pendientesVisibles.length > 0 ? "inline-block" : "none";
     }
-};
-// ============================================
-// LIMPIAR FORMULARIO (Global)
-// ============================================
-window.limpiarFormulario = function () {
-    ['r_n', 'r_t', 'r_d', 'r_l', 'r_cbu', 'd_n', 'd_t', 'd_d', 'd_l', 'd_cbu', 'cr_monto'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
-    
-    const cuerpoItems = document.getElementById('cuerpoItems');
-    if (cuerpoItems) cuerpoItems.innerHTML = '';
-    
-    window.retiroAsociadoActual = null;
-    
-    const avisoRetiro = document.getElementById('aviso-retiro');
-    if (avisoRetiro) avisoRetiro.style.display = 'none';
-    
-    if (typeof agregarFila === 'function') {
-        agregarFila();
-    }
-};
+
+    if (typeof renderRetiros === 'function') renderRetiros();
+});
+
+function puedeVerRetiro(r) {
+    if (ES_ADMIN) return true;
+    const localidad = (r.localidad || '').toUpperCase();
+    const pedidoPor = (r.pedido_por || '').toUpperCase();
+    return localidad === NOMBRE_SUCURSAL || pedidoPor === NOMBRE_SUCURSAL;
+}
+
 // ============================================
 // AUTOCOMPLETADO DE CLIENTES
 // ============================================
@@ -202,11 +176,8 @@ window.completarCliente = (tipo) => {
     });
 
     if (cliente) {
-        console.log("¡Cliente encontrado y autocompletado con éxito!", cliente);
-        
         document.getElementById(`${tipo}_d`).value = cliente.direccion || '';
         
-        // Manejo de localidad (selector o input 'OTRA')
         const selectLoc = document.getElementById(`select_${tipo}_l`);
         const locVal = cliente.localidad || '';
         if (selectLoc && locVal) {
@@ -236,77 +207,10 @@ window.completarCliente = (tipo) => {
     }
 };
 
-// --- RETIROS ---
-onValue(ref(db, 'moulin/retiros'), (snapshot) => {
-    const data = snapshot.val();
-    window.retirosGlobal = data
-        ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })).reverse()
-        : [];
-
-    // Calcular próximo número de retiro
-    const numsRetiro = window.retirosGlobal
-        .map(r => {
-            if (!r.num_retiro) return 0;
-            const partes = r.num_retiro.split('-');
-            return partes.length >= 3 ? parseInt(partes[2]) || 0 : 0;
-        })
-        .filter(n => !isNaN(n));
-    proximoRetiro = numsRetiro.length > 0 ? Math.max(...numsRetiro) + 1 : 1;
-
-    // Badge de pendientes visibles para esta sucursal
-    const pendientesVisibles = window.retirosGlobal.filter(r =>
-        r.estado === 'pendiente' && puedeVerRetiro(r)
-    );
-    const badge = document.getElementById('badge-retiros');
-    if (badge) {
-        badge.innerText = pendientesVisibles.length;
-        badge.style.display = pendientesVisibles.length > 0 ? "inline-block" : "none";
-    }
-
-    renderRetiros();
-});
-
 // ============================================
-// PERMISOS DE VISIBILIDAD DE RETIROS
-// ============================================
-function puedeVerRetiro(r) {
-    if (ES_ADMIN) return true;
-    const localidad = (r.localidad || '').toUpperCase();
-    const pedidoPor = (r.pedido_por || '').toUpperCase();
-    return localidad === NOMBRE_SUCURSAL || pedidoPor === NOMBRE_SUCURSAL;
-}
-
-// ============================================
-// AUTOCOMPLETADO DE CLIENTES (Con depuración)
-// ============================================
-window.completarCliente = (tipo) => {
-    const inputElem = document.getElementById(`${tipo}_n`);
-    if (!inputElem) return;
-    
-    const n = inputElem.value.trim().toLowerCase();
-    console.log("Buscando cliente:", n);
-    console.log("Clientes disponibles en memoria:", window.clientesGlobal);
-
-    const cliente = window.clientesGlobal.find(c => {
-        const nombreCliente = (c.nombre || c.n || '').trim().toLowerCase();
-        return nombreCliente === n;
-    });
-
-    if (cliente) {
-        console.log("¡Cliente encontrado!", cliente);
-        document.getElementById(`${tipo}_d`).value = cliente.direccion || cliente.d || '';
-        document.getElementById(`${tipo}_l`).value = cliente.localidad || cliente.l || '';
-        document.getElementById(`${tipo}_t`).value = cliente.telefono || cliente.t || '';
-        document.getElementById(`${tipo}_cbu`).value = cliente.cbu || cliente.alias || '';
-    } else {
-        console.log("No se encontró el cliente exacto en la lista global.");
-    }
-};
-// ============================================
-// GESTIÓN DE LOCALIDADES (SELECTOR + OTRA)
+// GESTIÓN DE LOCALIDADES
 // ============================================
 window.gestionarOtraLocalidad = (tipo) => {
-    // Mapeo de IDs según el tipo
     let selectId, inputOtraId, inputHiddenId;
     
     if (tipo === 'r') {
@@ -341,7 +245,7 @@ window.gestionarOtraLocalidad = (tipo) => {
 };
 
 // ============================================
-// FILTRO DINÁMICO DE LOCALIDADES
+// FILTRADO DE LOCALIDADES
 // ============================================
 window.actualizarFiltroLocalidades = function () {
     const localidades = new Set();
@@ -350,6 +254,7 @@ window.actualizarFiltroLocalidades = function () {
         if (g.r_l) localidades.add(g.r_l.trim().toUpperCase());
     });
     const select = document.getElementById('f_localidad');
+    if (!select) return;
     const valorActual = select.value;
     const sorted = Array.from(localidades).sort();
     select.innerHTML = '<option value="TODAS">-- Todas las localidades --</option>' +
@@ -400,24 +305,39 @@ window.calcularTotales = function () {
     return { flete, seg, total, v_decl: vdecl, cant_t };
 };
 
+// ============================================
+// LIMPIAR FORMULARIO
+// ============================================
+window.limpiarFormulario = function () {
+    ['r_n', 'r_t', 'r_d', 'r_l', 'r_cbu', 'd_n', 'd_t', 'd_d', 'd_l', 'd_cbu', 'cr_monto'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    
+    const cuerpoItems = document.getElementById('cuerpoItems');
+    if (cuerpoItems) cuerpoItems.innerHTML = '';
+    
+    window.retiroAsociadoActual = null;
+    
+    const avisoRetiro = document.getElementById('aviso-retiro');
+    if (avisoRetiro) avisoRetiro.style.display = 'none';
+    
+    if (typeof agregarFila === 'function') agregarFila();
+};
 
 // ============================================
-// EMISIÓN DE GUÍA (Con control total de guardado)
+// EMISIÓN DE GUÍA
 // ============================================
 const btnEmitir = document.getElementById('btn-emitir');
 if (btnEmitir) {
     btnEmitir.onclick = async () => {
-        console.log("🚨 ¡ENTRÓ AL EVENTO DE EMITIR GUÍA NUESTRO!"); // <-- Esto tiene que salir sí o sí en la consola
-
         const r_n = document.getElementById('r_n').value.trim();
         const d_n = document.getElementById('d_n').value.trim();
         if (!r_n || !d_n) return alert("⚠️ Faltan datos de clientes.");
 
-        // Obtener y validar localidad remitente
         const r_l_select = document.getElementById('select_r_l').value;
         const r_l_final = r_l_select === 'OTRA' ? document.getElementById('r_l_otra').value.trim() : r_l_select;
 
-        // Obtener y validar localidad destinatario
         const d_l_select = document.getElementById('select_d_l').value;
         const d_l_final = d_l_select === 'OTRA' ? document.getElementById('d_l_otra').value.trim() : d_l_select;
 
@@ -458,19 +378,12 @@ if (btnEmitir) {
         };
 
         try {
-            // 1. Guardar la guía en la nube
-            console.log("⏳ Guardando guía en Firebase...");
             await set(ref(db, `moulin/guias/${idU}`), guia);
-            console.log("✅ ¡Guía guardada con éxito!");
 
-            // 2. GUARDAR CLIENTES DIRECTAMENTE (Forzado)
             const guardarClienteForzado = async (nombre, dir, loc, tel, cbu) => {
                 if (!nombre || !nombre.trim()) return;
                 const key = nombre.trim().toUpperCase().replace(/[.#$/[\]]/g, "_");
-                const ruta = `moulin/clientes/${key}`;
-                console.log("💾 Guardando cliente en ruta:", ruta);
-                
-                await set(ref(db, ruta), {
+                await set(ref(db, `moulin/clientes/${key}`), {
                     nombre: nombre.trim().toUpperCase(),
                     direccion: dir || '',
                     localidad: loc || '',
@@ -478,13 +391,11 @@ if (btnEmitir) {
                     cbu: cbu || '',
                     ultimaActualizacion: Date.now()
                 });
-                console.log("🎉 ¡Cliente guardado con éxito en Firebase!");
             };
 
             await guardarClienteForzado(r_n, document.getElementById('r_d').value, r_l_final, document.getElementById('r_t').value, document.getElementById('r_cbu').value);
             await guardarClienteForzado(d_n, document.getElementById('d_d').value, d_l_final, document.getElementById('d_t').value, document.getElementById('d_cbu').value);
 
-            // 3. Si viene de un retiro, marcarlo como realizado
             if (retiroAsociadoActual) {
                 const retiro = window.retirosGlobal.find(r => r.num_retiro === retiroAsociadoActual);
                 if (retiro) {
@@ -506,9 +417,16 @@ if (btnEmitir) {
         }
     };
 }
+
 // ============================================
-// IMPRESIÓN
+// IMPRESIÓN DE GUÍA INDIVIDUAL
 // ============================================
+window.reimprimir = function(numGuia) {
+    const g = window.historialGlobal.find(item => item.num === numGuia);
+    if (!g) return alert("⚠️ Guía no encontrada.");
+    imprimir(g);
+};
+
 function imprimir(g) {
     const itemsH = (g.items || []).map(i => `
         <tr><td align="center">${i.c}</td><td>${i.t}</td><td>${i.d || ''}</td>
@@ -585,7 +503,7 @@ function imprimir(g) {
 }
 
 // ============================================
-// HISTORIAL DE GUÍAS
+// HISTORIAL DE GUÍAS Y ACTUALIZACIONES EN NUBE
 // ============================================
 window.cambiarFiltroEstado = (est, btn) => {
     window.filtroEstadoActual = est;
@@ -594,32 +512,41 @@ window.cambiarFiltroEstado = (est, btn) => {
     renderHistorial();
 };
 
+window.asignarRepartidor = async (firebaseID, repartidor) => {
+    try {
+        await update(ref(db, `moulin/guias/${firebaseID}`), { asignado_a: repartidor });
+    } catch (e) {
+        console.error("Error al asignar repartidor:", e);
+    }
+};
+
+window.actualizarEstadoNube = async (firebaseID, nuevoEstado) => {
+    try {
+        await update(ref(db, `moulin/guias/${firebaseID}`), { estado: nuevoEstado });
+    } catch (e) {
+        console.error("Error al actualizar estado:", e);
+    }
+};
+
 window.renderHistorial = () => {
     const busq = (document.getElementById('busq')?.value || '').toLowerCase();
     const fDesde = document.getElementById('f_desde')?.value || '';
     const fHasta = document.getElementById('f_hasta')?.value || '';
     const locElegida = (document.getElementById('f_localidad')?.value || "TODAS").toUpperCase();
-    
-    // CAPTURAMOS EL NUEVO TIPO DE FILTRO ('destino', 'origen' o 'todo')
     const tipoFiltro = document.getElementById('select-tipo-filtro')?.value || 'todo';
 
     const filtrados = window.historialGlobal.filter(g => {
         const sucPermitida = ES_ADMIN || (PREFIJO === "RECON" ? (g.num?.startsWith("RECON") || g.num?.startsWith("REC")) : g.num?.startsWith(PREFIJO));
         const est = (window.filtroEstadoActual === 'todos' || g.estado === window.filtroEstadoActual);
         
-        // --- NUEVA LÓGICA DE FILTRADO POR TIPO (DESTINO / ORIGEN / TODO) ---
         let cumpleLocalidad = true;
         if (locElegida !== "TODAS") {
             const esDestino = g.d_l && g.d_l.toUpperCase().includes(locElegida);
             const esOrigen = g.r_l && g.r_l.toUpperCase().includes(locElegida);
 
-            if (tipoFiltro === 'destino') {
-                cumpleLocalidad = esDestino;
-            } else if (tipoFiltro === 'origen') {
-                cumpleLocalidad = esOrigen;
-            } else {
-                cumpleLocalidad = esDestino || esOrigen; // 'todo'
-            }
+            if (tipoFiltro === 'destino') cumpleLocalidad = esDestino;
+            else if (tipoFiltro === 'origen') cumpleLocalidad = esOrigen;
+            else cumpleLocalidad = esDestino || esOrigen;
         }
 
         let fec = true;
@@ -638,33 +565,36 @@ window.renderHistorial = () => {
 
     window.datosParaExcel = filtrados;
 
-    document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map(g => `
-    <tr>
-        <td><b>${g.num || ''}</b></td>
-        <td><small>${g.retiro_asociado || '-'}</small></td>
-        <td>${g.fecha || ''}</td>
-        <td>${g.r_n || ''} > ${g.d_n || ''}</td>
-        <td>$${Number(g.total || 0).toLocaleString('es-AR')}</td>
-        <td>
-            <select onchange="asignarRepartidor('${g.firebaseID}', this.value)" style="font-size:11px; padding:4px; border-radius:4px; border:1px solid #6b46c1;">
-                <option value="">-- Sin asignar --</option>
-                ${window.repartidoresGlobal.filter(r => r.activo !== false && !r.eliminado).map(r => `<option value="${r.nombre}" ${g.asignado_a === r.nombre ? 'selected' : ''}>${r.nombre}</option>`).join('')}
-            </select>
-        </td>
-        <td>
-            <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px; background:${g.estado === 'entregado' ? '#d4edda' : g.estado === 'en_reparto' ? '#e9d8fd' : 'white'}">
-                <option value="recibido" ${g.estado === 'recibido' ? 'selected' : ''}>Recibido</option>
-                <option value="deposito" ${g.estado === 'deposito' ? 'selected' : ''}>Depósito</option>
-                <option value="en_reparto" ${g.estado === 'en_reparto' ? 'selected' : ''}>En Reparto</option>
-                <option value="entregado" ${g.estado === 'entregado' ? 'selected' : ''}>Entregado</option>
-            </select>
-        </td>
-        <td><button onclick="reimprimir('${g.num}')" title="Reimprimir">🖨️</button></td>
-    </tr>`).join('');
+    const listaHistorialElem = document.getElementById('listaHistorial');
+    if (listaHistorialElem) {
+        listaHistorialElem.innerHTML = filtrados.slice(0, 50).map(g => `
+        <tr>
+            <td><b>${g.num || ''}</b></td>
+            <td><small>${g.retiro_asociado || '-'}</small></td>
+            <td>${g.fecha || ''}</td>
+            <td>${g.r_n || ''} > ${g.d_n || ''}</td>
+            <td>$${Number(g.total || 0).toLocaleString('es-AR')}</td>
+            <td>
+                <select onchange="asignarRepartidor('${g.firebaseID}', this.value)" style="font-size:11px; padding:4px; border-radius:4px; border:1px solid #6b46c1;">
+                    <option value="">-- Sin asignar --</option>
+                    ${window.repartidoresGlobal.filter(r => r.activo !== false && !r.eliminado).map(r => `<option value="${r.nombre}" ${g.asignado_a === r.nombre ? 'selected' : ''}>${r.nombre}</option>`).join('')}
+                </select>
+            </td>
+            <td>
+                <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px; background:${g.estado === 'entregado' ? '#d4edda' : g.estado === 'en_reparto' ? '#e9d8fd' : 'white'}">
+                    <option value="recibido" ${g.estado === 'recibido' ? 'selected' : ''}>Recibido</option>
+                    <option value="deposito" ${g.estado === 'deposito' ? 'selected' : ''}>Depósito</option>
+                    <option value="en_reparto" ${g.estado === 'en_reparto' ? 'selected' : ''}>En Reparto</option>
+                    <option value="entregado" ${g.estado === 'entregado' ? 'selected' : ''}>Entregado</option>
+                </select>
+            </td>
+            <td><button onclick="reimprimir('${g.num}')" title="Reimprimir">🖨️</button></td>
+        </tr>`).join('');
+    }
 };
 
 // ============================================
-// EXCEL GUÍAS (Anchos compactos y orientación apaisada optimizada)
+// EXCEL Y REPORTE APAISADO (39 FILAS - 11PX)
 // ============================================
 window.descargarExcel = () => {
     if (!window.datosParaExcel || !window.datosParaExcel.length) {
@@ -675,20 +605,10 @@ window.descargarExcel = () => {
     const localidadNombre = selectLoc ? selectLoc.options[selectLoc.selectedIndex].text : "Todas";
 
     const wb = XLSX.utils.book_new();
-    
     const wsData = [
         [`Remitos con destino: ${localidadNombre}`],
         [],
-        [
-            'Fecha', 
-            'Nº de Guía', 
-            'Localidad Origen', 
-            'Remitente', 
-            'Destinatario', 
-            'Pago', 
-            'Condición', 
-            'Total ($)'
-        ]
+        ['Fecha', 'Nº de Guía', 'Localidad Origen', 'Remitente', 'Destinatario', 'Pago', 'Condición', 'Total ($)']
     ];
 
     window.datosParaExcel.forEach(g => {
@@ -709,908 +629,15 @@ window.descargarExcel = () => {
     });
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    // Anchos compactos y justos para que no sobre espacio y entre perfecto en hoja apaisada
-    ws['!cols'] = [
-        {wch: 11}, // Fecha
-        {wch: 14}, // Nº de Guía
-        {wch: 16}, // Localidad Origen
-        {wch: 22}, // Remitente
-        {wch: 22}, // Destinatario
-        {wch: 10}, // Pago
-        {wch: 11}, // Condición
-        {wch: 12}  // Total ($)
-    ];
-
-    // Configuración nativa para impresión horizontal (Apaisado)
-    ws['!pageSetup'] = {
-        orientation: 'landscape',
-        paperSize: 9, // A4
-        fitToWidth: 1,
-        fitToHeight: 0
-    };
+    ws['!cols'] = [{wch: 11}, {wch: 14}, {wch: 16}, {wch: 22}, {wch: 22}, {wch: 10}, {wch: 11}, {wch: 12}];
+    ws['!pageSetup'] = { orientation: 'landscape', paperSize: 9, fitToWidth: 1, fitToHeight: 0 };
 
     XLSX.utils.book_append_sheet(wb, ws, "Control de Caja");
-    
-    const fechaStr = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `Control_Rendicion_${fechaStr}.xlsx`);
+    XLSX.writeFile(wb, `Control_Caja_${new Date().toISOString().split('T')[0]}.xlsx`);
 };
 
 // ============================================
-// RETIROS - FORMULARIO
-// ============================================
-window.toggleFormRetiro = function () {
-    const form = document.getElementById('form-retiro-container');
-    form.style.display = form.style.display === 'none' ? 'block' : 'none';
-    if (form.style.display === 'none') {
-        ['ret_cliente', 'ret_direccion', 'ret_telefono', 'ret_localidad', 'ret_pedido_por', 'ret_observaciones'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
-        });
-        document.getElementById('ret_bultos').value = '1';
-    }
-};
-
-window.guardarRetiro = async function () {
-    const cliente = document.getElementById('ret_cliente').value.trim();
-    const localidad = document.getElementById('ret_localidad').value.trim().toUpperCase();
-    const pedidoPor = document.getElementById('ret_pedido_por').value.trim().toUpperCase();
-
-    if (!cliente) return alert("⚠️ Ingresá el nombre del local/persona.");
-    if (!localidad) return alert("⚠️ Ingresá la localidad donde se retira.");
-
-    // Abreviatura de la localidad para el número
-    const abrev = localidad.substring(0, 3);
-    const numRetiro = `RT-${abrev}-${String(proximoRetiro).padStart(5, '0')}`;
-
-    const retiro = {
-        num_retiro: numRetiro,
-        cliente: cliente,
-        direccion: document.getElementById('ret_direccion').value.trim(),
-        telefono: document.getElementById('ret_telefono').value.trim(),
-        localidad: localidad,
-        pedido_por: pedidoPor,
-        bultos: parseInt(document.getElementById('ret_bultos').value) || 1,
-        observaciones: document.getElementById('ret_observaciones').value.trim(),
-        estado: 'pendiente',
-        creadoPor: NOMBRE_OP,
-        sucursalCreadora: NOMBRE_SUCURSAL,
-        fechaCreacion: new Date().toLocaleDateString('es-AR'),
-        timestamp: Date.now()
-    };
-
-    try {
-        await set(ref(db, `moulin/retiros/${Date.now()}`), retiro);
-        toggleFormRetiro();
-        proximoRetiro++;
-    } catch (e) {
-        alert("❌ Error al guardar retiro: " + e.message);
-    }
-};
-
-// ============================================
-// RETIROS - RENDERIZADO
-// ============================================
-function renderRetiros() {
-    const div = document.getElementById('listaRetiros');
-    if (!div) return;
-
-    const filtroEstado = document.getElementById('filtro_ret_estado')?.value || 'pendiente';
-    const busq = (document.getElementById('busq_retiro')?.value || '').toLowerCase();
-
-    const visibles = window.retirosGlobal.filter(r => {
-        if (!puedeVerRetiro(r)) return false;
-        if (filtroEstado !== 'todos' && r.estado !== filtroEstado) return false;
-        if (busq) {
-            const texto = `${r.num_retiro} ${r.cliente} ${r.localidad} ${r.pedido_por} ${r.observaciones}`.toLowerCase();
-            if (!texto.includes(busq)) return false;
-        }
-        return true;
-    });
-
-    document.getElementById('contador-retiros').innerText = `${visibles.length} retiros`;
-
-    if (visibles.length === 0) {
-        div.innerHTML = `<p style="text-align:center; color:#666; padding:40px;">No hay retiros ${filtroEstado === 'pendiente' ? 'pendientes' : filtroEstado === 'realizado' ? 'realizados' : ''} para mostrar.</p>`;
-        return;
-    }
-
-    div.innerHTML = visibles.map(r => {
-        const claseEstado = r.estado === 'realizado' ? 'realizado' : r.estado === 'cancelado' ? 'cancelado' : '';
-        const iconoEstado = r.estado === 'realizado' ? '✅' : r.estado === 'cancelado' ? '❌' : '🔶';
-        const infoGuia = r.guiaAsociada ? `<br>📄 Guía: <b>${r.guiaAsociada}</b>` : '';
-
-// Generar opciones de repartidores
-const opcionesRep = window.repartidoresGlobal
-    .filter(rep => rep.activo !== false && !rep.eliminado)
-    .map(rep => `<option value="${rep.nombre}" ${r.asignado_a === rep.nombre ? 'selected' : ''}>${rep.nombre}</option>`)
-    .join('');
-
-let botones = '';
-if (r.estado === 'pendiente') {
-    botones = `
-        <select onchange="asignarRepartidorRetiro('${r.firebaseID}', this.value)" style="font-size:11px; padding:6px; border-radius:4px; border:1px solid #6b46c1; margin-bottom:5px; width:100%;">
-            <option value="">🏍️ Asignar repartidor...</option>
-            ${opcionesRep}
-        </select>
-        <button class="btn-guia" onclick="pasarRetiroAGuia('${r.firebaseID}')">📦 Realizar Guía</button>
-        <button class="btn-cancelar" onclick="cancelarRetiro('${r.firebaseID}')">✕ Cancelar</button>`;
-} else {
-    botones = `<button class="btn-ver" onclick="verRetiro('${r.firebaseID}')">👁️ Ver</button>`;
-}
-        return `
-            <div class="card-retiro ${claseEstado}">
-                <div class="retiro-info">
-                    <div class="retiro-num">${iconoEstado} ${r.num_retiro}</div>
-                    <div class="retiro-cliente">${r.cliente || 'Sin nombre'}</div>
-                    <div class="retiro-datos">
-                        📍 ${r.direccion || ''} — <b>${r.localidad || ''}</b><br>
-                        📞 ${r.telefono || '-'} | 📦 ${r.bultos || '?'} bultos
-                        ${r.observaciones ? `<br>📝 ${r.observaciones}` : ''}
-                    </div>
-                    <div class="retiro-meta">
-                        Pedido por: <b>${r.pedido_por || '-'}</b> | Creado: ${r.fechaCreacion || ''} por ${r.creadoPor || ''}
-                        ${infoGuia}
-                    </div>
-                </div>
-                <div class="retiro-acciones">${botones}</div>
-            </div>`;
-    }).join('');
-}
-
-// ============================================
-// RETIROS - ACCIONES
-// ============================================
-window.pasarRetiroAGuia = (firebaseID) => {
-    const r = window.retirosGlobal.find(x => x.firebaseID === firebaseID);
-    if (!r) return;
-
-    // Guardar el número de retiro asociado
-    retiroAsociadoActual = r.num_retiro;
-
-    // Llenar el formulario de REMITENTE con los datos del retiro
-    document.getElementById('r_n').value = r.cliente || '';
-    document.getElementById('r_d').value = r.direccion || '';
-    document.getElementById('r_l').value = r.localidad || '';
-    document.getElementById('r_t').value = r.telefono || '';
-
-    // Llenar el DESTINATARIO con la sucursal que pidió (si existe)
-    if (r.pedido_por) {
-        document.getElementById('d_l').value = r.pedido_por;
-    }
-
-    // Mostrar aviso
-    document.getElementById('aviso-retiro').style.display = 'flex';
-    document.getElementById('retiro-asociado-num').innerText = r.num_retiro;
-
-    // Cambiar al tab de guías
-    document.getElementById('btn-guia').click();
-};
-
-window.cancelarRetiroAsociado = function () {
-    retiroAsociadoActual = null;
-    document.getElementById('aviso-retiro').style.display = 'none';
-};
-
-window.cancelarRetiro = async (firebaseID) => {
-    if (!confirm("¿Estás seguro de cancelar este retiro?")) return;
-    try {
-        await update(ref(db, `moulin/retiros/${firebaseID}`), {
-            estado: 'cancelado',
-            canceladoPor: NOMBRE_OP,
-            fechaCancelado: new Date().toLocaleDateString('es-AR')
-        });
-    } catch (e) {
-        alert("Error al cancelar: " + e.message);
-    }
-};
-
-window.verRetiro = (firebaseID) => {
-    const r = window.retirosGlobal.find(x => x.firebaseID === firebaseID);
-    if (!r) return;
-    alert(`Retiro: ${r.num_retiro}\nCliente: ${r.cliente}\nDirección: ${r.direccion}\nLocalidad: ${r.localidad}\nTel: ${r.telefono}\nBultos: ${r.bultos}\nEstado: ${r.estado}\nPedido por: ${r.pedido_por}\nCreado: ${r.fechaCreacion} por ${r.creadoPor}\nObservaciones: ${r.observaciones || '-'}${r.guiaAsociada ? '\nGuía: ' + r.guiaAsociada : ''}`);
-};
-window.asignarRepartidorRetiro = async (retiroID, nombreRepartidor) => {
-    try {
-        await update(ref(db, `moulin/retiros/${retiroID}`), { 
-            asignado_a: nombreRepartidor || null,
-            fecha_asignacion: nombreRepartidor ? new Date().toLocaleString('es-AR') : null,
-            asignado_por: NOMBRE_OP
-        });
-    } catch (e) {
-        alert("Error al asignar: " + e.message);
-    }
-};
-// ============================================
-// RETIROS - EXCEL
-// ============================================
-window.exportarRetirosExcel = () => {
-    const filtroEstado = document.getElementById('filtro_ret_estado')?.value || 'pendiente';
-    const visibles = window.retirosGlobal.filter(r => {
-        if (!puedeVerRetiro(r)) return false;
-        if (filtroEstado !== 'todos' && r.estado !== filtroEstado) return false;
-        return true;
-    });
-
-    if (!visibles.length) return alert("No hay retiros para exportar.");
-
-    const data = visibles.map(r => ({
-        'N° Retiro': r.num_retiro,
-        'Cliente': r.cliente,
-        'Dirección': r.direccion,
-        'Localidad': r.localidad,
-        'Teléfono': r.telefono,
-        'Bultos': r.bultos,
-        'Pedido por': r.pedido_por,
-        'Observaciones': r.observaciones || '',
-        'Estado': r.estado?.toUpperCase() || '',
-        'Creado por': r.creadoPor || '',
-        'Fecha Creación': r.fechaCreacion || '',
-        'Guía Asociada': r.guiaAsociada || '',
-        'Realizado por': r.realizadoPor || ''
-    }));
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{wch:18},{wch:25},{wch:30},{wch:18},{wch:15},{wch:8},{wch:18},{wch:30},{wch:12},{wch:18},{wch:14},{wch:18},{wch:18}];
-    XLSX.utils.book_append_sheet(wb, ws, "Retiros");
-    XLSX.writeFile(wb, `Moulin_Retiros_${new Date().toISOString().split('T')[0]}.xlsx`);
-};
-
-// ============================================
-// CUENTA CORRIENTE
-// ============================================
-window.pagosGlobal = [];
-window.cierresGlobal = [];
-
-// Listener de pagos
-onValue(ref(db, 'moulin/pagos'), (snapshot) => {
-    const data = snapshot.val();
-    window.pagosGlobal = data ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })) : [];
-    renderTablaClientes();
-});
-
-// Listener de cierres
-onValue(ref(db, 'moulin/cierres'), (snapshot) => {
-    const data = snapshot.val();
-    window.cierresGlobal = data ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })) : [];
-    renderTablaClientes();
-});
-
-function renderTablaClientes() {
-    const tbody = document.getElementById('cuerpoTablaClientes');
-    if (!tbody) return;
-
-    // Actualizar datalist
-    const datalist = document.getElementById('lista_clientes_ctacte');
-    if (datalist) {
-        const clientesUnicos = [...new Set(window.historialGlobal.filter(g => g.condicion === 'CTA CTE').map(g => g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n))];
-        datalist.innerHTML = clientesUnicos.map(c => `<option value="${c}">`).join('');
-    }
-
-    // Calcular datos por cliente
-    const datosPorCliente = {};
-    
-    window.historialGlobal.forEach(g => {
-        if (g.condicion !== 'CTA CTE') return;
-        const cliente = g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n;
-        if (!datosPorCliente[cliente]) {
-            datosPorCliente[cliente] = { guias: [], localidad: g.r_l || g.d_l || '' };
-        }
-        datosPorCliente[cliente].guias.push(g);
-    });
-
-    const clientesConDatos = Object.entries(datosPorCliente).map(([nombre, data]) => {
-        // Buscar último cierre
-        const cierresCliente = window.cierresGlobal
-            .filter(c => c.cliente === nombre)
-            .sort((a, b) => b.timestamp - a.timestamp);
-        const ultimoCierre = cierresCliente[0];
-        
-        // Calcular saldo anterior
-        const saldoAnterior = ultimoCierre ? ultimoCierre.saldoFinal : 0;
-        
-        // Calcular guías desde último cierre
-        const fechaCierre = ultimoCierre ? ultimoCierre.timestamp : 0;
-        const guiasDesdeCierre = data.guias.filter(g => g.timestamp > fechaCierre);
-        const totalGuias = guiasDesdeCierre.reduce((sum, g) => sum + Number(g.total || 0), 0);
-        
-        // Calcular pagos desde último cierre
-        const pagosCliente = window.pagosGlobal.filter(p => p.cliente === nombre && p.timestamp > fechaCierre);
-        const totalPagos = pagosCliente.reduce((sum, p) => sum + Number(p.monto || 0), 0);
-        
-        const saldoActual = saldoAnterior + totalGuias - totalPagos;
-        
-        return {
-            nombre,
-            localidad: data.localidad,
-            ultimoCierre: ultimoCierre ? ultimoCierre.fechaCierre : 'Nunca',
-            saldoAnterior,
-            saldoActual,
-            timestampCierre: fechaCierre
-        };
-    }).sort((a, b) => b.saldoActual - a.saldoActual);
-
-    tbody.innerHTML = clientesConDatos.map(c => `
-        <tr>
-            <td><b>${c.nombre}</b></td>
-            <td>${c.localidad}</td>
-            <td>${c.ultimoCierre}</td>
-            <td>$${c.saldoAnterior.toLocaleString('es-AR')}</td>
-            <td class="${c.saldoActual > 0 ? 'saldo-positivo' : 'saldo-cero'}">$${c.saldoActual.toLocaleString('es-AR')}</td>
-            <td>
-                <button onclick="verDetalleCliente('${c.nombre}')" style="background:var(--azul); color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-right:5px;">👁️ Ver</button>
-                <button onclick="abrirModalExportar('${c.nombre}')" style="background:var(--verde); color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-right:5px;">📊</button>
-                <button onclick="cerrarPeriodo('${c.nombre}')" style="background:var(--rojo); color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">🔒</button>
-            </td>
-        </tr>`).join('');
-}
-
-window.toggleFormPago = function () {
-    const form = document.getElementById('form-pago-container');
-    form.style.display = form.style.display === 'none' ? 'block' : 'none';
-    if (form.style.display === 'none') {
-        ['pago_cliente', 'pago_monto', 'pago_observaciones'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
-        });
-    }
-};
-
-window.guardarPago = async function () {
-    const cliente = document.getElementById('pago_cliente').value.trim();
-    const monto = parseFloat(document.getElementById('pago_monto').value);
-    
-    if (!cliente) return alert("⚠️ Ingresá el nombre del cliente.");
-    if (!monto || monto <= 0) return alert("⚠️ Ingresá un monto válido.");
-    
-    const pago = {
-        cliente,
-        sucursal: NOMBRE_SUCURSAL,
-        monto,
-        tipo: document.getElementById('pago_tipo').value,
-        observaciones: document.getElementById('pago_observaciones').value.trim(),
-        fecha: new Date().toLocaleDateString('es-AR'),
-        timestamp: Date.now(),
-        registradoPor: NOMBRE_OP
-    };
-    
-    try {
-        await set(ref(db, `moulin/pagos/${Date.now()}`), pago);
-        toggleFormPago();
-        alert("✅ Pago registrado correctamente.");
-    } catch (e) {
-        alert("❌ Error al guardar: " + e.message);
-    }
-};
-
-window.verDetalleCliente = (nombre) => {
-    const modal = document.getElementById('modal-detalle-cliente');
-    const titulo = document.getElementById('detalle-cliente-titulo');
-    const contenido = document.getElementById('detalle-cliente-contenido');
-    
-    titulo.innerText = `💰 Cuenta Corriente: ${nombre}`;
-    
-    // Buscar último cierre
-    const cierresCliente = window.cierresGlobal
-        .filter(c => c.cliente === nombre)
-        .sort((a, b) => b.timestamp - a.timestamp);
-    const ultimoCierre = cierresCliente[0];
-    const fechaCierre = ultimoCierre ? ultimoCierre.timestamp : 0;
-    const saldoAnterior = ultimoCierre ? ultimoCierre.saldoFinal : 0;
-    
-    // Guías desde último cierre
-    const guiasCliente = window.historialGlobal.filter(g => {
-        if (g.condicion !== 'CTA CTE') return false;
-        const clienteGuia = g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n;
-        return clienteGuia === nombre && g.timestamp > fechaCierre;
-    });
-    
-    // Pagos desde último cierre
-    const pagosCliente = window.pagosGlobal.filter(p => p.cliente === nombre && p.timestamp > fechaCierre);
-    
-    const totalGuias = guiasCliente.reduce((sum, g) => sum + Number(g.total || 0), 0);
-    const totalPagos = pagosCliente.reduce((sum, p) => sum + Number(p.monto || 0), 0);
-    const saldoActual = saldoAnterior + totalGuias - totalPagos;
-    
-    let html = `
-        <div class="caja" style="background:#e3f2fd; border-left:4px solid var(--azul); padding:10px 15px; margin-bottom:15px;">
-            <b>Último cierre:</b> ${ultimoCierre ? ultimoCierre.fechaCierre : 'Nunca'}<br>
-            <b>Saldo anterior:</b> $${saldoAnterior.toLocaleString('es-AR')}
-        </div>
-        
-        <h4 style="color:var(--azul);">📄 Guías desde último cierre (${guiasCliente.length})</h4>
-        <table class="tabla-items">
-            <thead><tr><th>Guía</th><th>Fecha</th><th>Ruta</th><th>Total</th></tr></thead>
-            <tbody>
-                ${guiasCliente.map(g => `
-                    <tr>
-                        <td>${g.num}</td>
-                        <td>${g.fecha}</td>
-                        <td>${g.r_l} → ${g.d_l}</td>
-                        <td>$${Number(g.total).toLocaleString('es-AR')}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-        <div style="text-align:right; font-weight:bold; margin-top:5px;">Subtotal: $${totalGuias.toLocaleString('es-AR')}</div>
-        
-        <h4 style="color:var(--verde); margin-top:20px;">💵 Pagos desde último cierre (${pagosCliente.length})</h4>
-        <table class="tabla-items">
-            <thead><tr><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Observaciones</th></tr></thead>
-            <tbody>
-                ${pagosCliente.map(p => `
-                    <tr>
-                        <td>${p.fecha}</td>
-                        <td>${p.tipo}</td>
-                        <td>$${Number(p.monto).toLocaleString('es-AR')}</td>
-                        <td>${p.observaciones || '-'}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-        <div style="text-align:right; font-weight:bold; margin-top:5px;">Subtotal: $${totalPagos.toLocaleString('es-AR')}</div>
-        
-        <div class="caja" style="background:#fff3cd; border-left:4px solid var(--naranja); padding:15px; margin-top:20px; text-align:center;">
-            <div style="font-size:14px; color:#666;">Saldo anterior + Guías - Pagos</div>
-            <div style="font-size:32px; font-weight:bold; color:${saldoActual > 0 ? 'var(--rojo)' : 'var(--verde)'};">
-                $${saldoActual.toLocaleString('es-AR')}
-            </div>
-        </div>
-    `;
-    
-    contenido.innerHTML = html;
-    modal.style.display = 'block';
-};
-
-window.cerrarModalDetalle = () => {
-    document.getElementById('modal-detalle-cliente').style.display = 'none';
-};
-
-window.cerrarPeriodo = async (nombre) => {
-    // Calcular saldo actual
-    const cierresCliente = window.cierresGlobal
-        .filter(c => c.cliente === nombre)
-        .sort((a, b) => b.timestamp - a.timestamp);
-    const ultimoCierre = cierresCliente[0];
-    const fechaCierre = ultimoCierre ? ultimoCierre.timestamp : 0;
-    const saldoAnterior = ultimoCierre ? ultimoCierre.saldoFinal : 0;
-    
-    const guiasCliente = window.historialGlobal.filter(g => {
-        if (g.condicion !== 'CTA CTE') return false;
-        const clienteGuia = g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n;
-        return clienteGuia === nombre && g.timestamp > fechaCierre;
-    });
-    const totalGuias = guiasCliente.reduce((sum, g) => sum + Number(g.total || 0), 0);
-    
-    const pagosCliente = window.pagosGlobal.filter(p => p.cliente === nombre && p.timestamp > fechaCierre);
-    const totalPagos = pagosCliente.reduce((sum, p) => sum + Number(p.monto || 0), 0);
-    
-    const saldoActual = saldoAnterior + totalGuias - totalPagos;
-    
-    if (!confirm(`¿Cerrar período para ${nombre}?\n\nSaldo actual: $${saldoActual.toLocaleString('es-AR')}\n\nEsto guardará el saldo actual como "saldo anterior" y la cuenta arrancará en $0.`)) return;
-    
-    try {
-        await set(ref(db, `moulin/cierres/${Date.now()}`), {
-            cliente: nombre,
-            sucursal: NOMBRE_SUCURSAL,
-            fechaCierre: new Date().toLocaleDateString('es-AR'),
-            timestamp: Date.now(),
-            cerradoPor: NOMBRE_OP,
-            saldoFinal: saldoActual
-        });
-        alert("✅ Período cerrado correctamente.");
-    } catch (e) {
-        alert("❌ Error al cerrar: " + e.message);
-    }
-};
-
-window.abrirModalExportar = (nombre) => {
-    const modal = document.getElementById('modal-exportar');
-    document.getElementById('exportar-cliente-nombre').innerText = `Cliente: ${nombre}`;
-    modal.dataset.cliente = nombre;
-    modal.style.display = 'block';
-    
-    // Mostrar/ocultar fechas personalizadas
-    document.querySelectorAll('input[name="tipo-exportar"]').forEach(radio => {
-        radio.onchange = () => {
-            document.getElementById('fechas-personalizadas').style.display = 
-                radio.value === 'personalizado' && radio.checked ? 'block' : 'none';
-        };
-    });
-};
-
-window.cerrarModalExportar = () => {
-    document.getElementById('modal-exportar').style.display = 'none';
-};
-
-window.ejecutarExportar = () => {
-    const modal = document.getElementById('modal-exportar');
-    const nombre = modal.dataset.cliente;
-    const tipo = document.querySelector('input[name="tipo-exportar"]:checked').value;
-    
-    let fechaDesde = 0;
-    let fechaHasta = Date.now();
-    
-    if (tipo === 'actual') {
-        const cierresCliente = window.cierresGlobal
-            .filter(c => c.cliente === nombre)
-            .sort((a, b) => b.timestamp - a.timestamp);
-        fechaDesde = cierresCliente[0]?.timestamp || 0;
-    } else if (tipo === 'personalizado') {
-        const desde = document.getElementById('export-desde').value;
-        const hasta = document.getElementById('export-hasta').value;
-        if (!desde || !hasta) return alert("⚠️ Ingresá las fechas.");
-        
-        fechaDesde = new Date(desde).getTime();
-        fechaHasta = new Date(hasta).getTime() + 86400000; // +1 día
-    }
-    
-    // Filtrar guías y pagos en el rango de fechas
-    const guias = window.historialGlobal.filter(g => {
-        if (g.condicion !== 'CTA CTE') return false;
-        const clienteGuia = g.pago_en === 'PAGO EN ORIGEN' ? g.r_n : g.d_n;
-        return clienteGuia === nombre && g.timestamp >= fechaDesde && g.timestamp <= fechaHasta;
-    });
-    
-    const pagos = window.pagosGlobal.filter(p => 
-        p.cliente === nombre && p.timestamp >= fechaDesde && p.timestamp <= fechaHasta
-    );
-    
-    // Calcular saldo anterior antes del período seleccionado
-    const cierresCliente = window.cierresGlobal
-        .filter(c => c.cliente === nombre && c.timestamp < fechaDesde)
-        .sort((a, b) => b.timestamp - a.timestamp);
-    const saldoAnterior = cierresCliente[0]?.saldoFinal || 0;
-
-    // Combinar y ordenar cronológicamente guías y pagos
-    const movimientos = [
-        ...guias.map(g => ({ ...g, tipoMovimiento: 'GUIA', timestampMov: g.timestamp })),
-        ...pagos.map(p => ({ ...p, tipoMovimiento: 'PAGO', timestampMov: p.timestamp }))
-    ].sort((a, b) => a.timestampMov - b.timestampMov);
-
-    const wb = XLSX.utils.book_new();
-    
-    // 1. Cabecera con TÍTULO SUPERIOR (Punto 1)
-    const wsData = [
-        [`ESTADO DE CUENTA CORRIENTE: ${nombre.toUpperCase()}`],
-        [`Fecha de Emisión: ${new Date().toLocaleDateString('es-AR')}`],
-        [], // Espacio en blanco
-        // Encabezados limpios sin la columna "Guía" redundante (Punto 3)
-        [
-            'Fecha', 
-            'Nº Remito', 
-            'Contraparte (De / Para)', 
-            'Ruta', 
-            'Debe ($)', 
-            'Haber ($)', 
-            'Saldo ($)'
-        ]
-    ];
-
-    // Fila inicial con el Saldo Anterior
-    let saldoAcumulado = saldoAnterior;
-    wsData.push([
-        '-', 
-        '-', 
-        'SALDO ANTERIOR / PERÍODO ANTERIOR', 
-        '-', 
-        0, 
-        0, 
-        saldoAcumulado
-    ]);
-
-    // 2. Mapeo con la contraparte correcta (Punto 2)
-    movimientos.forEach(m => {
-        if (m.tipoMovimiento === 'GUIA') {
-            const esRemitente = (m.r_n || '').toLowerCase().trim() === nombre.toLowerCase().trim();
-            const contraparte = esRemitente ? `Para: ${m.d_n || '-'}` : `De: ${m.r_n || '-'}`;
-            
-            const debe = Number(m.total || 0);
-            saldoAcumulado += debe;
-
-            wsData.push([
-                m.fecha || '',
-                m.num || '',
-                contraparte,
-                `${m.r_l || ''} → ${m.d_l || ''}`,
-                debe,
-                0,
-                saldoAcumulado
-            ]);
-        } else if (m.tipoMovimiento === 'PAGO') {
-            const haber = Number(m.monto || 0);
-            saldoAcumulado -= haber;
-
-            wsData.push([
-                m.fecha || '',
-                '-',
-                `PAGO (${m.tipo || 'EFECTIVO'}) - ${m.observaciones || ''}`,
-                'Caja / Sucursal',
-                0,
-                haber,
-                saldoAcumulado
-            ]);
-        }
-    });
-
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    // 3. Anchos de columna y formato apaisado
-    ws['!cols'] = [
-        {wch: 12}, // Fecha
-        {wch: 16}, // Nº Remito
-        {wch: 32}, // Contraparte (De / Para)
-        {wch: 22}, // Ruta
-        {wch: 15}, // Debe ($)
-        {wch: 15}, // Haber ($)
-        {wch: 16}  // Saldo ($)
-    ];
-
-    ws['!pageSetup'] = {
-        orientation: 'landscape',
-        fitToWidth: 1,
-        fitToHeight: 0
-    };
-
-    XLSX.utils.book_append_sheet(wb, ws, "Cuenta Corriente");
-    
-    const clienteLimpio = nombre.replace(/[^a-zA-Z0-9]/g, "_");
-    const fechaStr = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `CC_${clienteLimpio}_${fechaStr}.xlsx`);
-    
-    cerrarModalExportar();
-};
-
-// ============================================
-// REPARTIDORES
-// ============================================
-window.repartidoresGlobal = [];
-
-// Listener de repartidores
-onValue(ref(db, 'moulin/repartidores'), (snapshot) => {
-    const data = snapshot.val();
-    const todos = data ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })) : [];
-    
-    // Filtrar por sucursal (salvo admin)
-    window.repartidoresGlobal = ES_ADMIN 
-        ? todos 
-        : todos.filter(r => (r.sucursal || '').toUpperCase() === NOMBRE_SUCURSAL);
-    
-    const badge = document.getElementById('badge-repartidores');
-    if (badge) badge.innerText = window.repartidoresGlobal.filter(r => r.activo !== false).length;
-    
-    renderRepartidores();
-    renderStatsRepartidores();
-
-     window.renderHistorial();   // Re-renderizar historial
-    renderRetiros();             // Re-renderizar retiros
-});
-
-window.toggleFormRepartidor = function (editandoID = null) {
-    const form = document.getElementById('form-repartidor-container');
-    const titulo = document.getElementById('form-rep-titulo');
-    const isVisible = form.style.display === 'block';
-    
-    form.style.display = isVisible ? 'none' : 'block';
-    
-    // Mostrar/ocultar selector de sucursal según sea admin
-    const selectSucursal = document.getElementById('rep_sucursal');
-    const labelSucursal = document.getElementById('label-sucursal-rep');
-    if (ES_ADMIN) {
-        selectSucursal.style.display = 'block';
-        labelSucursal.style.display = 'block';
-    } else {
-        selectSucursal.style.display = 'none';
-        labelSucursal.style.display = 'none';
-    }
-    
-    if (!isVisible && editandoID) {
-        // Modo edición
-        const rep = window.repartidoresGlobal.find(r => r.firebaseID === editandoID);
-        if (rep) {
-            titulo.innerText = `Editar Repartidor: ${rep.nombre}`;
-            document.getElementById('rep_editando_id').value = editandoID;
-            document.getElementById('rep_nombre').value = rep.nombre || '';
-            document.getElementById('rep_telefono').value = rep.telefono || '';
-            document.getElementById('rep_vehiculo').value = rep.vehiculo || '';
-            document.getElementById('rep_pin').value = rep.pin || '';
-            document.getElementById('rep_activo').value = (rep.activo !== false).toString();
-            if (ES_ADMIN) {
-                document.getElementById('rep_sucursal').value = rep.sucursal || 'RECON';
-            }
-        }
-    } else if (!isVisible) {
-        // Modo nuevo
-        titulo.innerText = 'Nuevo Repartidor';
-        document.getElementById('rep_editando_id').value = '';
-        ['rep_nombre', 'rep_telefono', 'rep_vehiculo', 'rep_pin'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
-        });
-        document.getElementById('rep_activo').value = 'true';
-        if (ES_ADMIN) {
-            document.getElementById('rep_sucursal').value = 'RECON'; // Valor por defecto
-        }
-    } else {
-        // Cerrando
-        document.getElementById('rep_editando_id').value = '';
-    }
-};
-
-window.guardarRepartidor = async function () {
-    const nombre = document.getElementById('rep_nombre').value.trim();
-    const pin = document.getElementById('rep_pin').value.trim();
-    
-    if (!nombre) return alert("⚠️ Ingresá el nombre del repartidor.");
-    if (!/^\d{4}$/.test(pin)) return alert("⚠️ El PIN debe tener 4 dígitos numéricos.");
-    
-    const editandoID = document.getElementById('rep_editando_id').value;
-    
-    // Si es admin, usar la sucursal seleccionada; si no, usar la de la sesión
-    const sucursal = ES_ADMIN 
-        ? document.getElementById('rep_sucursal').value 
-        : NOMBRE_SUCURSAL;
-    
-    const datos = {
-        nombre: nombre,
-        telefono: document.getElementById('rep_telefono').value.trim(),
-        vehiculo: document.getElementById('rep_vehiculo').value.trim(),
-        pin: pin,
-        activo: document.getElementById('rep_activo').value === 'true',
-        sucursal: sucursal,  // 👈 CAMBIO ACÁ
-        timestamp: Date.now()
-    };
-    
-    try {
-        if (editandoID) {
-            // Editar
-            await update(ref(db, `moulin/repartidores/${editandoID}`), datos);
-        } else {
-            // Crear nuevo
-            datos.creadoPor = NOMBRE_OP;
-            datos.fechaCreacion = new Date().toLocaleDateString('es-AR');
-            await set(ref(db, `moulin/repartidores/${Date.now()}`), datos);
-        }
-        toggleFormRepartidor();
-    } catch (e) {
-        alert("❌ Error al guardar: " + e.message);
-    }
-};
-
-window.eliminarRepartidor = async (firebaseID) => {
-    const rep = window.repartidoresGlobal.find(r => r.firebaseID === firebaseID);
-    if (!rep) return;
-    if (!confirm(`¿Eliminar definitivamente a ${rep.nombre}?`)) return;
-    
-    try {
-        // Usamos update con null para "borrar" (Firebase no permite delete real vía web)
-        await update(ref(db, `moulin/repartidores/${firebaseID}`), { activo: false, eliminado: true });
-    } catch (e) {
-        alert("Error al eliminar: " + e.message);
-    }
-};
-
-window.toggleActivoRepartidor = async (firebaseID) => {
-    const rep = window.repartidoresGlobal.find(r => r.firebaseID === firebaseID);
-    if (!rep) return;
-    
-    try {
-        await update(ref(db, `moulin/repartidores/${firebaseID}`), { 
-            activo: !(rep.activo !== false) 
-        });
-    } catch (e) {
-        alert("Error al cambiar estado: " + e.message);
-    }
-};
-
-function renderRepartidores() {
-    const div = document.getElementById('listaRepartidores');
-    if (!div) return;
-    
-    // Info sucursal
-    const infoSuc = document.getElementById('info-sucursal-rep');
-    if (infoSuc) infoSuc.innerText = NOMBRE_SUCURSAL;
-    
-    const activos = window.repartidoresGlobal.filter(r => r.activo !== false && !r.eliminado);
-    const inactivos = window.repartidoresGlobal.filter(r => r.activo === false && !r.eliminado);
-    
-    if (activos.length === 0 && inactivos.length === 0) {
-        div.innerHTML = `<p style="text-align:center; color:#666; padding:30px;">
-            No hay repartidores cargados.<br>
-            <button onclick="toggleFormRepartidor()" style="margin-top:10px; background:var(--verde); color:white; border:none; padding:8px 16px; border-radius:5px; cursor:pointer;">+ Crear el primero</button>
-        </p>`;
-        return;
-    }
-    
-    let html = '';
-    
-    if (activos.length > 0) {
-        html += `<h5 style="color:var(--verde); margin-top:10px;">✅ Activos (${activos.length})</h5>`;
-        html += activos.map(r => renderCardRepartidor(r, true)).join('');
-    }
-    
-    if (inactivos.length > 0) {
-        html += `<h5 style="color:#999; margin-top:15px;">❌ Inactivos (${inactivos.length})</h5>`;
-        html += inactivos.map(r => renderCardRepartidor(r, false)).join('');
-    }
-    
-    div.innerHTML = html;
-}
-
-function renderCardRepartidor(r, activo) {
-    // Contar guías asignadas en reparto a este repartidor
-    const enReparto = window.historialGlobal.filter(g => 
-        g.asignado_a === r.nombre && g.estado === 'en_reparto'
-    ).length;
-    
-    const entregadas = window.historialGlobal.filter(g => 
-        g.asignado_a === r.nombre && g.estado === 'entregado'
-    ).length;
-    
-    return `
-        <div class="card-repartidor ${activo ? '' : 'inactivo'}">
-            <div class="repartidor-info">
-                <div class="rep-nombre">🏍️ ${r.nombre}</div>
-                <div class="rep-datos">
-                    ${r.telefono ? `📞 ${r.telefono}` : ''} 
-                    ${r.vehiculo ? `| 🚗 ${r.vehiculo}` : ''}
-                    ${enReparto > 0 ? `<br><span style="color:#6b46c1; font-weight:bold;">📦 ${enReparto} en reparto ahora</span>` : ''}
-                    ${entregadas > 0 ? ` | ✅ ${entregadas} entregadas` : ''}
-                </div>
-                <div class="rep-pin">PIN: ${r.pin || '----'}</div>
-            </div>
-            <div class="repartidor-acciones">
-                <button class="btn-editar-rep" onclick="toggleFormRepartidor('${r.firebaseID}')">✏️ Editar</button>
-                <button class="btn-desactivar-rep" onclick="toggleActivoRepartidor('${r.firebaseID}')">
-                    ${activo ? '⏸️ Desactivar' : '▶️ Activar'}
-                </button>
-                <button class="btn-eliminar-rep" onclick="eliminarRepartidor('${r.firebaseID}')">🗑️</button>
-            </div>
-        </div>`;
-}
-
-function renderStatsRepartidores() {
-    const div = document.getElementById('stats-repartidores');
-    if (!div) return;
-    
-    const activos = window.repartidoresGlobal.filter(r => r.activo !== false && !r.eliminado).length;
-    const enReparto = window.historialGlobal.filter(g => g.asignado_a && g.estado === 'en_reparto').length;
-    const entregadasHoy = window.historialGlobal.filter(g => {
-        if (!g.asignado_a || g.estado !== 'entregado') return false;
-        return g.fecha === new Date().toLocaleDateString('es-AR');
-    }).length;
-    
-    div.innerHTML = `
-        <div class="caja" style="text-align:center;">
-            <div style="font-size:28px; font-weight:bold; color:var(--verde);">${activos}</div>
-            <small>Repartidores activos</small>
-        </div>
-        <div class="caja" style="text-align:center;">
-            <div style="font-size:28px; font-weight:bold; color:#6b46c1;">${enReparto}</div>
-            <small>En reparto ahora</small>
-        </div>
-        <div class="caja" style="text-align:center;">
-            <div style="font-size:28px; font-weight:bold; color:var(--azul);">${entregadasHoy}</div>
-            <small>Entregadas hoy</small>
-        </div>
-    `;
-}
-// ============================================
-// INICIALIZACIÓN
-// ============================================
-window.onload = () => {
-    if (document.getElementById('cuerpoItems') && !document.getElementById('cuerpoItems').innerHTML) {
-        window.agregarFila();
-    }
-};
-
-if (document.getElementById('add-item')) {
-    document.getElementById('add-item').onclick = window.agregarFila;
-}
-
-// ============================================
-// IMPRESIÓN APAISADA - TAMAÑO IDEAL (39 FILAS)
+// IMPRESIÓN APAISADA - 39 FILAS (11px legible)
 // ============================================
 window.imprimirHistorialApaisado = function() {
     const datosAImprimir = window.datosParaExcel; 
@@ -1641,7 +668,6 @@ window.imprimirHistorialApaisado = function() {
                 h2 { text-align: center; margin: 0 0 5px 0; color: #1a4a7a; font-size: 14px; }
                 p { text-align: center; margin: 0 0 10px 0; font-size: 11px; color: #666; }
                 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-                /* Celdas con tamaño legible y altura justa para 39 filas por hoja */
                 th, td { 
                     padding: 5px 8px !important; 
                     height: 18px !important; 
@@ -1683,5 +709,4 @@ window.imprimirHistorialApaisado = function() {
         </html>
     `);
     ventanaImpresion.document.close();
-};
 };
