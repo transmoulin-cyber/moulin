@@ -1608,3 +1608,63 @@ window.onload = () => {
 if (document.getElementById('add-item')) {
     document.getElementById('add-item').onclick = window.agregarFila;
 }
+
+// ============================================
+// IMPRESIÓN APAISADA DE LA PLANILLA DE HISTORIAL
+// ============================================
+window.imprimirHistorialApaisado = function() {
+    const contenidoTabla = document.getElementById('listaHistorial').innerHTML;
+    
+    if (!contenidoTabla || contenidoTabla.trim() === "") {
+        alert("⚠️ No hay datos en el historial para imprimir con este filtro.");
+        return;
+    }
+
+    const ventanaImpresion = window.open('', '_blank', 'width=1000,height=700');
+    ventanaImpresion.document.write(`
+        <html>
+        <head>
+            <title>Planilla de Auditoría - Moulin</title>
+            <style>
+                @page { size: A4 landscape; margin: 10mm; }
+                body { font-family: Arial, sans-serif; font-size: 11px; color: #333; margin: 0; padding: 10px; }
+                h2 { text-align: center; margin-bottom: 5px; color: #1a4a7a; }
+                p { text-align: center; margin-top: 0; font-size: 12px; color: #666; margin-bottom: 15px; }
+                table { width: 100%; border-collapse: collapse; }
+                th { background: #1a4a7a; color: white; padding: 6px; border: 1px solid #000; font-size: 11px; text-align: left; }
+                td { padding: 5px; border: 1px solid #ccc; font-size: 11px; vertical-align: middle; }
+                /* Ocultar botones o elementos interactivos sueltos al imprimir */
+                button { display: none !important; }
+                select { border: none; font-size: 11px; background: transparent; font-family: inherit; }
+            </style>
+        </head>
+        <body>
+            <h2>TRANSPORTE MOULIN - CONTROL DE COBROS Y DEPÓSITO</h2>
+            <p>Fecha de emisión: ${new Date().toLocaleDateString('es-AR')}</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Guía</th>
+                        <th>Retiro</th>
+                        <th>Fecha</th>
+                        <th>Ruta (Origen > Destino)</th>
+                        <th>Total</th>
+                        <th>Repartidor</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${contenidoTabla}
+                </tbody>
+            </table>
+            <script>
+                window.onload = function() {
+                    window.print();
+                    window.close();
+                }
+            </script>
+        </body>
+        </html>
+    `);
+    ventanaImpresion.document.close();
+};
