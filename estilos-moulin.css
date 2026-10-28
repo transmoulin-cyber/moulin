@@ -380,42 +380,7 @@ textarea { width: 98%; }
 
 }
 
-/* --- ANCHO REDUCIDO PARA COLUMNAS DE PAGO Y CONDICIONES EN HISTORIAL --- */
-/* Limita el ancho de las columnas del medio hacia la derecha en la tabla del historial */
-.tabla-items th:nth-child(5), 
-.tabla-items td:nth-child(5),
-.tabla-items th:nth-child(6), 
-.tabla-items td:nth-child(6),
-.tabla-items th:nth-child(7), 
-.tabla-items td:nth-child(7) {
-    max-width: 90px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-align: center;
-}
-
-/* Achica los selects de repartidor y estado dentro de la tabla */
-.tabla-items select {
-    max-width: 110px;
-    font-size: 11px;
-    padding: 3px;
-}
-
-/* --- FORMATO APAISADO Y ANCHO DE COLUMNAS PARA HISTORIAL --- */
-@media print {
-    @page {
-        size: A4 landscape !important;
-        margin: 8mm !important;
-    }
-    
-    body {
-        width: 100% !important;
-        margin: 0 !important;
-    }
-}
-
-/* Forzar el ancho compacto en las columnas 5, 6 y 7 de la tabla del historial */
+/* --- ANCHO REDUCIDO PARA COLUMNAS DE LA TABLA --- */
 .tabla-items th:nth-child(5), 
 .tabla-items td:nth-child(5),
 .tabla-items th:nth-child(6), 
@@ -430,7 +395,6 @@ textarea { width: 98%; }
     text-align: center !important;
 }
 
-/* Achicar los selectores que están dentro de la tabla */
 .tabla-items td select {
     max-width: 100px !important;
     font-size: 10px !important;
