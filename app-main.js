@@ -263,7 +263,7 @@ window.actualizarFiltroLocalidades = function () {
 };
 
 // ============================================
-// TABLA DE ÍTEMS
+// TABLA DE ÍTEMS (BULTOS, PRECIOS Y TOTALES)
 // ============================================
 window.agregarFila = () => {
     const cuerpoItems = document.getElementById('cuerpoItems');
@@ -277,7 +277,7 @@ window.agregarFila = () => {
         <td><input type="text" class="i-det" placeholder="Detalle"></td>
         <td><input type="number" class="i-unit" value="20000" min="0" oninput="calcularTotales()"></td>
         <td><input type="number" class="i-decl" value="0" min="0" oninput="calcularTotales()"></td>
-        <td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();">✕</button></td>`;
+        <td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();" style="background:#e53e3e; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">✕</button></td>`;
     cuerpoItems.appendChild(tr);
     calcularTotales();
 };
@@ -305,6 +305,14 @@ window.calcularTotales = function () {
     return { flete, seg, total, v_decl: vdecl, cant_t };
 };
 
+// Inicializamos la primera fila por defecto al cargar el script si la tabla existe
+document.addEventListener("DOMContentLoaded", () => {
+    const cuerpoItems = document.getElementById('cuerpoItems');
+    if (cuerpoItems && cuerpoItems.children.length === 0) {
+        agregarFila();
+    }
+});
+
 // ============================================
 // LIMPIAR FORMULARIO
 // ============================================
@@ -322,7 +330,7 @@ window.limpiarFormulario = function () {
     const avisoRetiro = document.getElementById('aviso-retiro');
     if (avisoRetiro) avisoRetiro.style.display = 'none';
     
-    if (typeof agregarFila === 'function') agregarFila();
+    agregarFila();
 };
 
 // ============================================
