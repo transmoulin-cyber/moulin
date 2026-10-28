@@ -645,7 +645,7 @@ window.descargarExcel = () => {
 };
 
 // ============================================
-// IMPRESIÓN APAISADA - 39 FILAS (11px legible)
+// IMPRESIÓN APAISADA - TÉRMINO MEDIO (10px - 39 FILAS)
 // ============================================
 window.imprimirHistorialApaisado = function() {
     const datosAImprimir = window.datosParaExcel; 
@@ -671,17 +671,17 @@ window.imprimirHistorialApaisado = function() {
         <head>
             <title>Planilla de Auditoría - Moulin</title>
             <style>
-                @page { size: A4 landscape; margin: 10mm; }
-                body { font-family: Arial, sans-serif; font-size: 11px; color: #333; margin: 0; padding: 0; }
-                h2 { text-align: center; margin: 0 0 5px 0; color: #1a4a7a; font-size: 14px; }
-                p { text-align: center; margin: 0 0 10px 0; font-size: 11px; color: #666; }
+                @page { size: A4 landscape; margin: 8mm; }
+                body { font-family: Arial, sans-serif; font-size: 10px; color: #333; margin: 0; padding: 0; }
+                h2 { text-align: center; margin: 0 0 3px 0; color: #1a4a7a; font-size: 13px; }
+                p { text-align: center; margin: 0 0 6px 0; font-size: 10px; color: #666; }
                 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
                 th, td { 
-                    padding: 5px 8px !important; 
-                    height: 18px !important; 
-                    max-height: 18px !important; 
-                    border: 1px solid #bbb; 
-                    font-size: 11px; 
+                    padding: 4px 6px !important; 
+                    height: 16px !important; 
+                    max-height: 16px !important; 
+                    border: 1px solid #aaa; 
+                    font-size: 10px; 
                     overflow: hidden; 
                     white-space: nowrap; 
                     text-overflow: ellipsis; 
@@ -696,11 +696,11 @@ window.imprimirHistorialApaisado = function() {
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 15%;">Guía</th>
-                        <th style="width: 12%;">Fecha</th>
-                        <th style="width: 48%;">Ruta (Origen > Destino)</th>
-                        <th style="width: 12%;">Total</th>
-                        <th style="width: 13%;">Repartidor</th>
+                        <th style="width: 14%;">Guía</th>
+                        <th style="width: 11%;">Fecha</th>
+                        <th style="width: 53%;">Ruta (Origen > Destino)</th>
+                        <th style="width: 11%;">Total</th>
+                        <th style="width: 11%;">Repartidor</th>
                     </tr>
                 </thead>
                 <tbody>
