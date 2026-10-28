@@ -598,12 +598,30 @@ window.renderHistorial = () => {
     const busq = (document.getElementById('busq')?.value || '').toLowerCase();
     const fDesde = document.getElementById('f_desde')?.value || '';
     const fHasta = document.getElementById('f_hasta')?.value || '';
-    const locElegida = document.getElementById('f_localidad')?.value || "TODAS";
+    const locElegida = (document.getElementById('f_localidad')?.value || "TODAS").toUpperCase();
+    
+    // CAPTURAMOS EL NUEVO TIPO DE FILTRO ('destino', 'origen' o 'todo')
+    const tipoFiltro = document.getElementById('select-tipo-filtro')?.value || 'todo';
 
     const filtrados = window.historialGlobal.filter(g => {
         const sucPermitida = ES_ADMIN || (PREFIJO === "RECON" ? (g.num?.startsWith("RECON") || g.num?.startsWith("REC")) : g.num?.startsWith(PREFIJO));
         const est = (window.filtroEstadoActual === 'todos' || g.estado === window.filtroEstadoActual);
-        const cumpleLocalidad = (locElegida === "TODAS") || (g.d_l && g.d_l.toUpperCase().includes(locElegida)) || (g.r_l && g.r_l.toUpperCase().includes(locElegida));
+        
+        // --- NUEVA LÓGICA DE FILTRADO POR TIPO (DESTINO / ORIGEN / TODO) ---
+        let cumpleLocalidad = true;
+        if (locElegida !== "TODAS") {
+            const esDestino = g.d_l && g.d_l.toUpperCase().includes(locElegida);
+            const esOrigen = g.r_l && g.r_l.toUpperCase().includes(locElegida);
+
+            if (tipoFiltro === 'destino') {
+                cumpleLocalidad = esDestino;
+            } else if (tipoFiltro === 'origen') {
+                cumpleLocalidad = esOrigen;
+            } else {
+                cumpleLocalidad = esDestino || esOrigen; // 'todo'
+            }
+        }
+
         let fec = true;
         if (fDesde || fHasta) {
             const p = (g.fecha || '').split('/');
@@ -614,23 +632,25 @@ window.renderHistorial = () => {
             }
         }
         const b = (g.num || '').toLowerCase().includes(busq) || (g.r_n || '').toLowerCase().includes(busq) || (g.d_n || '').toLowerCase().includes(busq) || (g.retiro_asociado || '').toLowerCase().includes(busq);
+        
         return sucPermitida && est && cumpleLocalidad && fec && b;
     });
 
     window.datosParaExcel = filtrados;
-document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map(g => `
+
+    document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map(g => `
     <tr>
         <td><b>${g.num || ''}</b></td>
         <td><small>${g.retiro_asociado || '-'}</small></td>
         <td>${g.fecha || ''}</td>
         <td>${g.r_n || ''} > ${g.d_n || ''}</td>
         <td>$${Number(g.total || 0).toLocaleString('es-AR')}</td>
-<td>
-    <select onchange="asignarRepartidor('${g.firebaseID}', this.value)" style="font-size:11px; padding:4px; border-radius:4px; border:1px solid #6b46c1;">
-        <option value="">-- Sin asignar --</option>
-        ${window.repartidoresGlobal.filter(r => r.activo !== false && !r.eliminado).map(r => `<option value="${r.nombre}" ${g.asignado_a === r.nombre ? 'selected' : ''}>${r.nombre}</option>`).join('')}
-    </select>
-</td>
+        <td>
+            <select onchange="asignarRepartidor('${g.firebaseID}', this.value)" style="font-size:11px; padding:4px; border-radius:4px; border:1px solid #6b46c1;">
+                <option value="">-- Sin asignar --</option>
+                ${window.repartidoresGlobal.filter(r => r.activo !== false && !r.eliminado).map(r => `<option value="${r.nombre}" ${g.asignado_a === r.nombre ? 'selected' : ''}>${r.nombre}</option>`).join('')}
+            </select>
+        </td>
         <td>
             <select onchange="actualizarEstadoNube('${g.firebaseID}', this.value)" style="font-size:11px; background:${g.estado === 'entregado' ? '#d4edda' : g.estado === 'en_reparto' ? '#e9d8fd' : 'white'}">
                 <option value="recibido" ${g.estado === 'recibido' ? 'selected' : ''}>Recibido</option>
@@ -642,31 +662,6 @@ document.getElementById('listaHistorial').innerHTML = filtrados.slice(0, 50).map
         <td><button onclick="reimprimir('${g.num}')" title="Reimprimir">🖨️</button></td>
     </tr>`).join('');
 };
-
-window.actualizarEstadoNube = (id, est) => {
-    update(ref(db, `moulin/guias/${id}`), { estado: est }).catch(err => alert("Error: " + err.message));
-};
-window.asignarRepartidor = async (guiaID, nombreRepartidor) => {
-    try {
-        await update(ref(db, `moulin/guias/${guiaID}`), { 
-            asignado_a: nombreRepartidor || null,
-            fecha_asignacion: nombreRepartidor ? new Date().toLocaleString('es-AR') : null,
-            asignado_por: NOMBRE_OP
-        });
-        
-        // Si se asignó un repartidor, cambiar estado a "en_reparto" automáticamente
-        if (nombreRepartidor) {
-            await update(ref(db, `moulin/guias/${guiaID}`), { estado: 'en_reparto' });
-        }
-    } catch (e) {
-        alert("Error al asignar: " + e.message);
-    }
-};
-window.reimprimir = (num) => {
-    const g = window.historialGlobal.find(x => x.num === num);
-    if (g) imprimir(g); else alert("Guía no encontrada.");
-};
-
 
 // ============================================
 // EXCEL GUÍAS (Anchos compactos y orientación apaisada optimizada)
