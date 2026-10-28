@@ -1610,7 +1610,7 @@ if (document.getElementById('add-item')) {
 }
 
 // ============================================
-// IMPRESIÓN APAISADA MÁXIMA COMPRESIÓN (39 FILAS POR HOJA)
+// IMPRESIÓN APAISADA - PUNTO JUSTO (39 FILAS CÓMODAS)
 // ============================================
 window.imprimirHistorialApaisado = function() {
     const datosAImprimir = window.datosParaExcel; 
@@ -1636,22 +1636,22 @@ window.imprimirHistorialApaisado = function() {
         <head>
             <title>Planilla de Auditoría - Moulin</title>
             <style>
-                @page { size: A4 landscape; margin: 4mm; }
-                body { font-family: Arial, sans-serif; font-size: 8px; color: #333; margin: 0; padding: 0; }
-                h2 { text-align: center; margin: 0 0 1px 0; color: #1a4a7a; font-size: 11px; }
-                p { text-align: center; margin: 0 0 3px 0; font-size: 8px; color: #666; }
+                @page { size: A4 landscape; margin: 6mm; }
+                body { font-family: Arial, sans-serif; font-size: 9px; color: #333; margin: 0; padding: 0; }
+                h2 { text-align: center; margin: 0 0 2px 0; color: #1a4a7a; font-size: 12px; }
+                p { text-align: center; margin: 0 0 5px 0; font-size: 9px; color: #666; }
                 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-                /* Altura ultra reducida para alcanzar las 39 filas por hoja */
+                /* Altura intermedia y fuente de 9px para una lectura clara pero compacta */
                 th, td { 
-                    padding: 1px 3px !important; 
-                    height: 10px !important; 
-                    max-height: 10px !important; 
+                    padding: 3px 5px !important; 
+                    height: 14px !important; 
+                    max-height: 14px !important; 
                     border: 1px solid #aaa; 
-                    font-size: 8px; 
+                    font-size: 9px; 
                     overflow: hidden; 
                     white-space: nowrap; 
                     text-overflow: ellipsis; 
-                    line-height: 1; 
+                    line-height: 1.2; 
                 }
                 th { background: #1a4a7a; color: white; font-weight: bold; }
             </style>
