@@ -277,7 +277,7 @@ window.actualizarFiltroLocalidades = function () {
 // ============================================
 // TABLA DE ÍTEMS (BULTOS, PRECIOS Y TOTALES)
 // ============================================
-window.agregarFila = () => {
+window.agregarFila = function() {
     const cuerpoItems = document.getElementById('cuerpoItems');
     if (!cuerpoItems) return;
     const tr = document.createElement('tr');
