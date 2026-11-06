@@ -555,6 +555,29 @@ window.imprimirPlanillaLote = (planilla, guiasLote) => {
 };
 
 // ============================================
+// CIERRE DE PLANILLA CON CARTEL DE SEGURIDAD
+// ============================================
+window.confirmarCierrePlanilla = () => {
+    const pendientes = window.historialGlobal.filter(g => !g.planillado);
+    
+    if (pendientes.length === 0) {
+        return alert("⚠️ No hay guías pendientes de planillado para cerrar en este momento.");
+    }
+
+    // Cartel de advertencia/seguridad
+    const confirmacion = confirm(
+        `🛡️ ATENCIÓN: Estás a punto de generar el Cierre de Planilla.\n\n` +
+        `Se procesarán ${pendientes.length} guías pendientes y se reiniciará la tanda.\n\n` +
+        `¿Estás seguro de que deseas continuar?`
+    );
+
+    if (!confirmacion) return;
+
+    // Si acepta, ejecutamos el cierre
+    window.generarCierrePlanilla();
+};
+
+// ============================================
 // IMPRESIÓN DE GUÍA INDIVIDUAL
 // ============================================
 window.reimprimir = function(numGuia) {
