@@ -41,6 +41,7 @@ window.historialGlobal = [];
 window.clientesGlobal = [];
 window.retirosGlobal = [];
 window.repartidoresGlobal = [];
+window.planillasGlobal = [];
 window.filtroEstadoActual = 'todos';
 window.datosParaExcel = [];
 let proximoNumero = 1001;
@@ -91,6 +92,12 @@ onValue(ref(db, 'moulin/guias'), (snapshot) => {
     }
 });
 
+// --- PLANILLAS / LOTES ---
+onValue(ref(db, 'moulin/planillas'), (snapshot) => {
+    const data = snapshot.val();
+    window.planillasGlobal = data ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })).reverse() : [];
+});
+
 // --- CLIENTES ---
 onValue(ref(db, 'moulin/clientes'), (snapshot) => {
     const data = snapshot.val();
@@ -129,7 +136,7 @@ onValue(ref(db, 'moulin/repartidores'), (snapshot) => {
 onValue(ref(db, 'moulin/retiros'), (snapshot) => {
     const data = snapshot.val();
     window.retirosGlobal = data
-        ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id })).reverse()
+        ? Object.entries(data).map(([id, val]) => ({ ...val, firebaseID: id }))
         : [];
 
     const numsRetiro = window.retirosGlobal
@@ -161,18 +168,26 @@ function puedeVerRetiro(r) {
 }
 
 // ============================================
-// AUTOCOMPLETADO DE CLIENTES
+// AUTOCOMPLETADO DE CLIENTES (NO INVASIVO)
 // ============================================
 window.completarCliente = (tipo) => {
     const inputElem = document.getElementById(`${tipo}_n`);
     if (!inputElem) return;
     
     const valorBuscado = inputElem.value.trim().toLowerCase();
-    if (!valorBuscado) return;
+    
+    // Si el input queda vacío, limpiamos automáticamente los campos asociados
+    if (!valorBuscado) {
+        document.getElementById(`${tipo}_d`).value = '';
+        document.getElementById(`${tipo}_t`).value = '';
+        document.getElementById(`${tipo}_cbu`).value = '';
+        return;
+    }
 
+    // Buscar coincidencia exacta por nombre en la base
     const cliente = window.clientesGlobal.find(c => {
         const nombreC = (c.nombre || '').trim().toLowerCase();
-        return nombreC === valorBuscado || nombreC.includes(valorBuscado);
+        return nombreC === valorBuscado;
     });
 
     if (cliente) {
@@ -235,7 +250,6 @@ window.gestionarOtraLocalidad = (tipo) => {
 
     if (select.value === 'OTRA') {
         inputOtra.style.display = 'block';
-        inputOtra.focus();
         inputHidden.value = '';
     } else {
         inputOtra.style.display = 'none';
@@ -277,7 +291,7 @@ window.agregarFila = () => {
         <td><input type="text" class="i-det" placeholder="Detalle"></td>
         <td><input type="number" class="i-unit" value="20000" min="0" oninput="calcularTotales()"></td>
         <td><input type="number" class="i-decl" value="0" min="0" oninput="calcularTotales()"></td>
-        <td><button onclick="this.parentElement.parentElement.remove(); calcularTotales();" style="background:#e53e3e; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">✕</button></td>`;
+        <td><button type="button" onclick="this.parentElement.parentElement.remove(); calcularTotales();" style="background:#e53e3e; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">✕</button></td>`;
     cuerpoItems.appendChild(tr);
     calcularTotales();
 };
@@ -305,12 +319,29 @@ window.calcularTotales = function () {
     return { flete, seg, total, v_decl: vdecl, cant_t };
 };
 
-// Inicializamos la primera fila por defecto al cargar el script si la tabla existe
+// Enlace seguro al botón de agregar bulto y carga inicial de la fila
 document.addEventListener("DOMContentLoaded", () => {
     const cuerpoItems = document.getElementById('cuerpoItems');
     if (cuerpoItems && cuerpoItems.children.length === 0) {
         agregarFila();
     }
+
+    // Asegurar eventos en inputs de clientes (blur / change para no ser invasivos)
+    ['r', 'd'].forEach(tipo => {
+        const inputNombre = document.getElementById(`${tipo}_n`);
+        if (inputNombre) {
+            inputNombre.addEventListener('change', () => completarCliente(tipo));
+            inputNombre.addEventListener('blur', () => completarCliente(tipo));
+        }
+    });
+
+    // Enlace universal para botones de agregar bulto si existieran con ID o clase específica
+    document.querySelectorAll('.btn-agregar-bulto, #btn-agregar-fila').forEach(btn => {
+        btn.onclick = (e) => {
+            e.preventDefault();
+            agregarFila();
+        };
+    });
 });
 
 // ============================================
@@ -320,6 +351,17 @@ window.limpiarFormulario = function () {
     ['r_n', 'r_t', 'r_d', 'r_l', 'r_cbu', 'd_n', 'd_t', 'd_d', 'd_l', 'd_cbu', 'cr_monto'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
+    });
+    
+    // Resetear selectores de localidad
+    ['select_r_l', 'select_d_l'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (sel) sel.selectedIndex = 0;
+    });
+
+    ['r_l_otra', 'd_l_otra'].forEach(id => {
+        const otra = document.getElementById(id);
+        if (otra) otra.style.display = 'none';
     });
     
     const cuerpoItems = document.getElementById('cuerpoItems');
@@ -377,6 +419,7 @@ if (btnEmitir) {
             p_seg_aplicado: document.getElementById('p_seg').value,
             estado: 'recibido',
             emisor: NOMBRE_OP,
+            planillado: false, // Control de lote / cierre de planilla
             retiro_asociado: retiroAsociadoActual || '',
             items: Array.from(document.querySelectorAll('#cuerpoItems tr')).map(tr => ({
                 c: tr.querySelector('.i-cant').value, t: tr.querySelector('.i-tipo').value,
@@ -425,6 +468,95 @@ if (btnEmitir) {
         }
     };
 }
+
+// ============================================
+// CIERRE DE PLANILLA / LOTE DE MAÑANA
+// ============================================
+window.generarCierrePlanilla = async () => {
+    const pendientes = window.historialGlobal.filter(g => !g.planillado);
+    if (pendientes.length === 0) {
+        return alert("⚠️ No hay guías pendientes de planillado para cerrar.");
+    }
+
+    if (!confirm(`Se generará el cierre con ${pendientes.length} guías pendientes. ¿Deseas continuar?`)) return;
+
+    const idPlanilla = Date.now();
+    const numeroPlanilla = `PLA-${String(window.planillasGlobal.length + 1).padStart(4, '0')}`;
+
+    const datosPlanilla = {
+        id: numeroPlanilla,
+        fecha: new Date().toLocaleDateString('es-AR'),
+        timestamp: Date.now(),
+        operador: NOMBRE_OP,
+        sucursal: NOMBRE_SUCURSAL,
+        totalGuias: pendientes.length,
+        guias: pendientes.map(g => g.num)
+    };
+
+    try {
+        // Guardar registro de la planilla en Firebase
+        await set(ref(db, `moulin/planillas/${idPlanilla}`), datosPlanilla);
+
+        // Marcar todas las guías del lote como planilladas para que no se repitan
+        for (let g of pendientes) {
+            await update(ref(db, `moulin/guias/${g.firebaseID}`), { planillado: true, lote_planilla: numeroPlanilla });
+        }
+
+        alert(`✅ ¡Planilla ${numeroPlanilla} generada con éxito!`);
+        window.imprimirPlanillaLote(datosPlanilla, pendientes);
+    } catch (e) {
+        console.error("Error al generar cierre de planilla:", e);
+        alert("❌ Error al generar la planilla.");
+    }
+};
+
+window.imprimirPlanillaLote = (planilla, guiasLote) => {
+    const filasHTML = guiasLote.map(g => `
+        <tr>
+            <td><b>${g.num || ''}</b></td>
+            <td>${g.fecha || ''}</td>
+            <td>${g.r_l || '-'} > ${g.d_l || '-'}</td>
+            <td>${g.r_n || ''} > ${g.d_n || ''}</td>
+            <td>$${Number(g.total || 0).toLocaleString('es-AR')}</td>
+        </tr>
+    `).join('');
+
+    const vPrint = window.open('', '_blank', 'width=1000,height=700');
+    vPrint.document.write(`
+        <html>
+        <head>
+            <title>Planilla Oficial ${planilla.id}</title>
+            <style>
+                @page { size: A4 landscape; margin: 8mm; }
+                body { font-family: Arial, sans-serif; font-size: 10px; color: #333; margin: 0; padding: 0; }
+                h2 { text-align: center; margin: 0 0 3px 0; color: #1a4a7a; font-size: 13px; }
+                p { text-align: center; margin: 0 0 6px 0; font-size: 10px; color: #666; }
+                table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+                th, td { padding: 4px 6px; border: 1px solid #aaa; font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+                th { background: #1a4a7a; color: white; }
+            </style>
+        </head>
+        <body>
+            <h2>TRANSPORTE MOULIN - LOTE DE PLANILLA: ${planilla.id}</h2>
+            <p>Emisión: ${planilla.fecha} | Operador: ${planilla.operador} | Total Guías: ${planilla.totalGuias}</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">Guía</th>
+                        <th style="width: 12%;">Fecha</th>
+                        <th style="width: 25%;">Localidad (Origen > Destino)</th>
+                        <th style="width: 38%;">Cliente (Remitente > Destinatario)</th>
+                        <th style="width: 10%;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>${filasHTML}</tbody>
+            </table>
+            <script>window.onload = function() { window.print(); window.close(); }</script>
+        </body>
+        </html>
+    `);
+    vPrint.document.close();
+};
 
 // ============================================
 // IMPRESIÓN DE GUÍA INDIVIDUAL
@@ -577,7 +709,7 @@ window.renderHistorial = () => {
     if (listaHistorialElem) {
         listaHistorialElem.innerHTML = filtrados.slice(0, 50).map(g => `
         <tr>
-            <td><b>${g.num || ''}</b></td>
+            <td><b>${g.num || ''}</b> ${g.lote_planilla ? `<br><small style="color:#666;">[${g.lote_planilla}]</small>` : ''}</td>
             <td><small>${g.retiro_asociado || '-'}</small></td>
             <td>${g.fecha || ''}</td>
             <td>${g.r_n || ''} > ${g.d_n || ''}</td>
@@ -596,13 +728,13 @@ window.renderHistorial = () => {
                     <option value="entregado" ${g.estado === 'entregado' ? 'selected' : ''}>Entregado</option>
                 </select>
             </td>
-            <td><button onclick="reimprimir('${g.num}')" title="Reimprimir">🖨️</button></td>
+            <td><button type="button" onclick="reimprimir('${g.num}')" title="Reimprimir">🖨️</button></td>
         </tr>`).join('');
     }
 };
 
 // ============================================
-// EXCEL Y REPORTE APAISADO (39 FILAS - 11PX)
+// EXCEL Y REPORTE APAISADO (39 FILAS - 10PX)
 // ============================================
 window.descargarExcel = () => {
     if (!window.datosParaExcel || !window.datosParaExcel.length) {
@@ -644,9 +776,6 @@ window.descargarExcel = () => {
     XLSX.writeFile(wb, `Control_Caja_${new Date().toISOString().split('T')[0]}.xlsx`);
 };
 
-// ============================================
-// IMPRESIÓN APAISADA - TÉRMINO MEDIO (10px - 39 FILAS)
-// ============================================
 window.imprimirHistorialApaisado = function() {
     const datosAImprimir = window.datosParaExcel; 
 
