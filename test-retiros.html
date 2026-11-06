@@ -42,19 +42,20 @@
             <select id="f_localidad" onchange="renderHistorial()" style="width:160px;">
                 <option value="TODAS">-- Todas las localidades --</option>
             </select>
-            <!-- NUEVO: Selector de tipo de filtro para auditoría de cobros -->
+            <!-- Selector de tipo de filtro para auditoría de cobros -->
             <select id="select-tipo-filtro" onchange="renderHistorial()" style="width:150px; padding:7px; border:2px solid var(--azul); border-radius:4px; font-weight:bold; color:var(--azul);">
                 <option value="destino">🎯 Solo Destino</option>
                 <option value="origen">🛫 Solo Origen</option>
                 <option value="todo" selected>🌐 Origen y Destino</option>
             </select>
             <button onclick="descargarExcel()" style="background:#1d6f42; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">📊 Exportar Excel</button>
+            
+            <!-- Botón de Cierre de Planilla con aviso de seguridad -->
+            <button type="button" onclick="confirmarCierrePlanilla()" style="background: #2b6cb0; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                🔒 Cerrar Planilla / Lote
+            </button>
         </div>
       
-<!-- Botón de Cierre de Planilla con aviso de seguridad -->
-<button type="button" onclick="confirmarCierrePlanilla()" style="background: #2b6cb0; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 8px;">
-    🔒 Cerrar Planilla / Lote
-</button>
         <section class="caja grid-2">
             <div id="form-remitente">
                 <b>REMITENTE</b>
@@ -122,7 +123,8 @@
                 <thead><tr><th>Cant</th><th>Tipo</th><th>Detalle</th><th>Unitario $</th><th>V.Decl $</th><th></th></tr></thead>
                 <tbody id="cuerpoItems"></tbody>
             </table>
-            <button id="add-item" style="margin-top:10px;">+ Agregar Bulto</button>
+            <!-- Botón de bultos corregido con ID y onclick directo -->
+            <button type="button" id="add-item" onclick="agregarFila()" style="margin-top:10px; background:#2b6cb0; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">+ Agregar Bulto</button>
         </section>
 
         <section class="caja caja-condiciones">
@@ -412,10 +414,6 @@
 <div id="seccion-impresion" style="display:none;"></div>
 
 <script type="module" src="app-main.js"></script>
-
-</body>
-</html>
-    
 
 </body>
 </html>
