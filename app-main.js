@@ -324,8 +324,8 @@ document.addEventListener("DOMContentLoaded", () => {
         agregarFila();
     }
 
-    // Vincular botón de agregar bulto de forma segura (por ID o por clase)
-    const btnAgregar = document.getElementById('btn-agregar-bulto') || document.querySelector('button[onclick*="agregarFila"]') || document.getElementById('btn-agregar-fila');
+    // Vincular botón de agregar bulto (por ID 'add-item' que está en tu HTML)
+    const btnAgregar = document.getElementById('add-item') || document.querySelector('button[onclick*="agregarFila"]');
     if (btnAgregar) {
         btnAgregar.onclick = (e) => {
             e.preventDefault();
@@ -468,15 +468,28 @@ if (btnEmitir) {
 }
 
 // ============================================
-// CIERRE DE PLANILLA / LOTE DE MAÑANA
+// CIERRE DE PLANILLA CON CARTEL DE SEGURIDAD
 // ============================================
-window.generarCierrePlanilla = async () => {
+window.confirmarCierrePlanilla = () => {
     const pendientes = window.historialGlobal.filter(g => !g.planillado);
+    
     if (pendientes.length === 0) {
-        return alert("⚠️ No hay guías pendientes de planillado para cerrar.");
+        return alert("⚠️ No hay guías pendientes de planillado para cerrar en este momento.");
     }
 
-    if (!confirm(`Se generará el cierre con ${pendientes.length} guías pendientes. ¿Deseas continuar?`)) return;
+    const confirmacion = confirm(
+        `🛡️ ATENCIÓN: Estás a punto de generar el Cierre de Planilla.\n\n` +
+        `Se procesarán ${pendientes.length} guías pendientes y se asignará su número de lote.\n\n` +
+        `¿Estás seguro de que deseas continuar?`
+    );
+
+    if (!confirmacion) return;
+    window.generarCierrePlanilla();
+};
+
+window.generarCierrePlanilla = async () => {
+    const pendientes = window.historialGlobal.filter(g => !g.planillado);
+    if (pendientes.length === 0) return;
 
     const idPlanilla = Date.now();
     const numeroPlanilla = `PLA-${String(window.planillasGlobal.length + 1).padStart(4, '0')}`;
@@ -518,6 +531,11 @@ window.imprimirPlanillaLote = (planilla, guiasLote) => {
     `).join('');
 
     const vPrint = window.open('', '_blank', 'width=1000,height=700');
+    if (!vPrint) {
+        alert("⚠️ El navegador bloqueó la ventana emergente de impresión. Habilitá los pop-ups para este sitio.");
+        return;
+    }
+
     vPrint.document.write(`
         <html>
         <head>
@@ -547,34 +565,16 @@ window.imprimirPlanillaLote = (planilla, guiasLote) => {
                 </thead>
                 <tbody>${filasHTML}</tbody>
             </table>
-            <script>window.onload = function() { window.print(); window.close(); }</script>
+            <script>
+                window.onload = function() {
+                    window.print();
+                    window.close();
+                }
+            </script>
         </body>
         </html>
     `);
     vPrint.document.close();
-};
-
-// ============================================
-// CIERRE DE PLANILLA CON CARTEL DE SEGURIDAD
-// ============================================
-window.confirmarCierrePlanilla = () => {
-    const pendientes = window.historialGlobal.filter(g => !g.planillado);
-    
-    if (pendientes.length === 0) {
-        return alert("⚠️ No hay guías pendientes de planillado para cerrar en este momento.");
-    }
-
-    // Cartel de advertencia/seguridad
-    const confirmacion = confirm(
-        `🛡️ ATENCIÓN: Estás a punto de generar el Cierre de Planilla.\n\n` +
-        `Se procesarán ${pendientes.length} guías pendientes y se reiniciará la tanda.\n\n` +
-        `¿Estás seguro de que deseas continuar?`
-    );
-
-    if (!confirmacion) return;
-
-    // Si acepta, ejecutamos el cierre
-    window.generarCierrePlanilla();
 };
 
 // ============================================
@@ -753,7 +753,7 @@ window.renderHistorial = () => {
 };
 
 // ============================================
-// EXCEL Y REPORTE APAISADO (39 FILAS - 10PX)
+// EXCEL
 // ============================================
 window.descargarExcel = () => {
     if (!window.datosParaExcel || !window.datosParaExcel.length) {
@@ -793,76 +793,4 @@ window.descargarExcel = () => {
 
     XLSX.utils.book_append_sheet(wb, ws, "Control de Caja");
     XLSX.writeFile(wb, `Control_Caja_${new Date().toISOString().split('T')[0]}.xlsx`);
-};
-
-window.imprimirHistorialApaisado = function() {
-    const datosAImprimir = window.datosParaExcel; 
-
-    if (!datosAImprimir || datosAImprimir.length === 0) {
-        alert("⚠️ No hay datos en el historial para imprimir con este filtro.");
-        return;
-    }
-
-    const filasHTML = datosAImprimir.map(g => `
-        <tr>
-            <td><b>${g.num || ''}</b></td>
-            <td>${g.fecha || ''}</td>
-            <td>${g.r_n || ''} > ${g.d_n || ''}</td>
-            <td>$${Number(g.total || 0).toLocaleString('es-AR')}</td>
-            <td>${g.asignado_a || '-'}</td>
-        </tr>
-    `).join('');
-
-    const ventanaImpresion = window.open('', '_blank', 'width=1000,height=700');
-    ventanaImpresion.document.write(`
-        <html>
-        <head>
-            <title>Planilla de Auditoría - Moulin</title>
-            <style>
-                @page { size: A4 landscape; margin: 8mm; }
-                body { font-family: Arial, sans-serif; font-size: 10px; color: #333; margin: 0; padding: 0; }
-                h2 { text-align: center; margin: 0 0 3px 0; color: #1a4a7a; font-size: 13px; }
-                p { text-align: center; margin: 0 0 6px 0; font-size: 10px; color: #666; }
-                table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-                th, td { 
-                    padding: 4px 6px !important; 
-                    height: 16px !important; 
-                    max-height: 16px !important; 
-                    border: 1px solid #aaa; 
-                    font-size: 10px; 
-                    overflow: hidden; 
-                    white-space: nowrap; 
-                    text-overflow: ellipsis; 
-                    line-height: 1.2; 
-                }
-                th { background: #1a4a7a; color: white; font-weight: bold; }
-            </style>
-        </head>
-        <body>
-            <h2>TRANSPORTE MOULIN - CONTROL DE COBROS Y DEPÓSITO</h2>
-            <p>Fecha de emisión: ${new Date().toLocaleDateString('es-AR')}</p>
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 14%;">Guía</th>
-                        <th style="width: 11%;">Fecha</th>
-                        <th style="width: 53%;">Ruta (Origen > Destino)</th>
-                        <th style="width: 11%;">Total</th>
-                        <th style="width: 11%;">Repartidor</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${filasHTML}
-                </tbody>
-            </table>
-            <script>
-                window.onload = function5 = function() {
-                    window.print();
-                    window.close();
-                }
-            </script>
-        </body>
-        </html>
-    `);
-    ventanaImpresion.document.close();
 };
